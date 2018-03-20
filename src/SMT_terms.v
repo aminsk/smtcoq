@@ -13,6 +13,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+Add Rec LoadPath "." as SMTCoq.
 
 Require Import Bool List Int63 PArray.
 Require Import Misc State.
@@ -22,7 +23,10 @@ Local Open Scope int63_scope.
 
 Hint Unfold is_true.
 
+Definition  myeqbool  :=Zeq_bool.
 
+
+ 
 (* Remark: I use Notation instead of Definition du eliminate conversion check during the type checking *)
 Notation atom := int (only parsing).
 
@@ -283,6 +287,7 @@ Module Typ.
   Section Interp.
 
     Variable t_i : PArray.array typ_eqb.
+    (*interpreter les types*)
 
     Definition interp t :=
       match t with
@@ -292,21 +297,28 @@ Module Typ.
       | Tpositive => positive
       end.
 
+    
+
     Definition interp_ftype (t:ftype) :=
       List.fold_right (fun dom codom =>interp dom -> codom)
-      (interp (snd t)) (fst t).
+                      (interp (snd t)) (fst t).
+
+
+
+    
 
     (* Boolean equality over interpretation of a btype *)
     Section Interp_Equality.
 
+
       Definition i_eqb (t:type) : interp t -> interp t -> bool :=
         match t with
         | Tindex i => (t_i.[i]).(te_eqb)
-        | TZ => Zeq_bool
+        | TZ => Zbool.Zeq_bool
         | Tbool => Bool.eqb
         | Tpositive => Peqb
         end.
-
+        
       Lemma i_eqb_spec : forall t x y, i_eqb t x y <-> x = y.
       Proof.
        destruct t;simpl;intros.
@@ -598,6 +610,7 @@ Module Atom.
     preflect (Int63Properties.reflect_eqb i i1);
     preflect (Int63Properties.reflect_eqb i0 i2);
     constructor;subst;trivial.
+
     (* N-ary operators *)
     preflect (reflect_nop_eqb n n0); preflect (reflect_list_beq _ _ Int63Properties.reflect_eqb l l0); constructor; subst; reflexivity.
     (* Application *)
@@ -1320,3 +1333,6 @@ Module Atom.
 End Atom.
 
 Arguments Atom.Val {_} {_} _ _.
+
+
+
