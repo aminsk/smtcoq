@@ -13,26 +13,35 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
+(*modul for representation of sat and smt terms*)
+(*there are 2 implementation of ATOM,one for the sat solver (atoms are only varibales ,one for smt solver (atoms ....)*)
 open SmtMisc
 open CoqTerms
 
-(** Syntaxified version of Coq type *)
+
 type indexed_type = Term.constr gen_hashed
 
+
+(**Term.makApp:constr -> constr array -> constr function**)
 let dummy_indexed_type i = {index = i; hval = Term.mkProp}
 let indexed_type_index i = i.index
 
+(*le type des atoms handled by smt solvers::TZ,Tbool,Tpositive*)
 type btype =
-  | TZ
-  | Tbool
-  | Tpositive
-  | Tindex of indexed_type
+  | TZ (*integers*)
+  | Tbool(*booleans*)
+  | Tpositive(*entiers positive ?????pourquoi ps des entiers negatifs*)
+  | Tindex of indexed_type(*uninterpreted :indexed by machine integers::deal with coq terms that are not handled by smt solvers like users defined or higher order types*)
 
+
+
+(**********module Btype ****************)
 module Btype = 
   struct 
+    let index_tbl = Hashtbl.create 17
 
-    let index_tbl = Hashtbl.create 17 
+    (*creer les index des variables qui nexistent pas dans le table hash*)
+      
 
     let index_to_coq i =
       let i = i.index in 
@@ -47,7 +56,7 @@ module Btype =
         | Tindex i, Tindex j -> i.index == j.index
         | _ -> t1 == t2
 
-    let to_coq = function 
+     let to_coq = function 
       | TZ -> Lazy.force cTZ
       | Tbool -> Lazy.force cTbool
       | Tpositive -> Lazy.force cTpositive
@@ -79,6 +88,7 @@ module Btype =
 
     let declare reify t typ_eqb =
       (* TODO: allows to have only typ_eqb *)
+      (*lever une exception si le type t nest pas conforme aux types de table de hachage*)
       assert (not (Hashtbl.mem reify.tbl t));
       let res = Tindex {index = reify.count; hval = typ_eqb} in
       Hashtbl.add reify.tbl t res;
@@ -89,6 +99,7 @@ module Btype =
       try
         Hashtbl.find reify.tbl t
       with | Not_found ->
+	(*declaration des variables*)
         let n = string_of_int (List.length reify.cuts) in
         let eq_name = Names.id_of_string ("eq"^n) in
         let eq_var = Term.mkVar eq_name in
@@ -174,8 +185,11 @@ type op =
   | Nop of nop
   | Iop of indexed_op
 
+(*************************module op*******************)
+
 module Op =
-  struct 
+struct
+    (*cC sont definit dans coqTerms.ml ,ils sont les cstes en caml des smt_modules*)
     let c_to_coq = function
       | CO_xH -> Lazy.force cCO_xH
       | CO_Z0 -> Lazy.force cCO_Z0
@@ -202,6 +216,8 @@ module Op =
     let u_type_arg = function 
       | UO_xO | UO_xI | UO_Zpos | UO_Zneg -> Tpositive
       | UO_Zopp -> TZ
+
+    (*vers les terms caml*)
 
     let interp_uop = function
       | UO_xO -> Lazy.force cxO
@@ -370,6 +386,9 @@ and hatom = atom gen_hashed
 (*   | Abop (b,c,d) -> "(Abop "^(pp_abop b)^" "^(pp_atom c.hval)^" "^(pp_atom d.hval)^")" *)
 (*   | Aapp (op,a) -> "(Aapp "^(string_of_int op.index)^" ("^(Array.fold_left (fun acc h -> acc^" "^(pp_atom h.hval)) "" a)^"))" *)
 
+
+(*********************module HashedAtom******************)
+
 module HashedAtom =
   struct 
     type t = atom
@@ -416,6 +435,10 @@ module HashedAtom =
           (hash_args lsl 5 + op.index lsl 3) lxor 4
 
   end
+
+
+
+(****************************module atom************************************************)
 
 module HashAtom = Hashtbl.Make(HashedAtom)
 
@@ -572,8 +595,10 @@ module Atom =
       | CCeqb
       | CCeqbP
       | CCeqbZ
+      | CCmyeqbool
       | CCunknown
 
+	  
     let op_tbl () =
       let tbl = Hashtbl.create 29 in
       let add (c1,c2) = Hashtbl.add tbl (Lazy.force c1) c2 in
@@ -582,7 +607,7 @@ module Atom =
           cxO,CCxO; cxI,CCxI; cZpos,CCZpos; cZneg,CCZneg; copp,CCZopp;
           cadd,CCZplus; csub,CCZminus; cmul,CCZmult; cltb,CCZlt;
           cleb,CCZle; cgeb,CCZge; cgtb,CCZgt; ceqb,CCeqb; ceqbP,CCeqbP;
-          ceqbZ, CCeqbZ
+          ceqbZ, CCeqbZ ; cmyeqbool ,CCmyeqbool
         ];
       tbl
 
@@ -591,7 +616,9 @@ module Atom =
     let of_coq rt ro reify env sigma c =
       let op_tbl = Lazy.force op_tbl in
       let get_cst c =
-	try Hashtbl.find op_tbl c with Not_found -> CCunknown in
+	try Hashtbl.find op_tbl c with Not_found -> CCunknown
+        
+      in
       let mk_cop op = get reify (Acop op) in
       let rec mk_hatom h =
 	let c, args = Term.decompose_app h in
@@ -613,6 +640,7 @@ module Atom =
           | CCeqb -> mk_bop (BO_eq Tbool) args
           | CCeqbP -> mk_bop (BO_eq Tpositive) args
           | CCeqbZ -> mk_bop (BO_eq TZ) args
+	  |CCmyeqbool ->mk_bop(BO_eq TZ) args
 	  | CCunknown -> mk_unknown c args (Retyping.get_type_of env sigma h)
 
       and mk_uop op = function
@@ -627,16 +655,21 @@ module Atom =
         | _ -> assert false
 
       and mk_unknown c args ty =
-        let hargs = Array.of_list (List.map mk_hatom args) in
-        let op =
+	let hargs=Array.of_list(List.map mk_hatom args) in
+	let op =
+ 
+	  (*ro:reify *)
           try Op.of_coq ro c
           with | Not_found ->
+	   
             let targs = Array.map type_of hargs in
             let tres = Btype.of_coq rt ty in
             Op.declare ro c targs tres in
-        get reify (Aapp (op,hargs)) in
+ get reify (Aapp (op,hargs)) in
 
-       mk_hatom c
+	  mk_hatom c 
+
+
 
 
     let to_coq h = mkInt h.index
@@ -758,11 +791,12 @@ module Atom =
 
   end
 
-
+   
 module Form = SmtForm.Make(Atom)
 module Trace = SmtTrace.MakeOpt(Form)
 
 
+  
 (* Interpretation tables *)
 
 let mk_ftype cod dom =
