@@ -595,7 +595,7 @@ module Atom =
       | CCeqb
       | CCeqbP
       | CCeqbZ
-      | CCmyeqbool
+      
       | CCunknown
 
 	  
@@ -607,22 +607,47 @@ module Atom =
           cxO,CCxO; cxI,CCxI; cZpos,CCZpos; cZneg,CCZneg; copp,CCZopp;
           cadd,CCZplus; csub,CCZminus; cmul,CCZmult; cltb,CCZlt;
           cleb,CCZle; cgeb,CCZge; cgtb,CCZgt; ceqb,CCeqb; ceqbP,CCeqbP;
-          ceqbZ, CCeqbZ ; cmyeqbool ,CCmyeqbool
+          ceqbZ, CCeqbZ  
         ];
       tbl
 
     let op_tbl = lazy (op_tbl ())
+    (*********le tableau defini par utilisateur****)
+    
+    let op_tbl2 () =
+      let tbl2 = Hashtbl.create 40 in
+      let add (c1prim ,c2prim) =Hashtbl.add tbl2 (Lazy.force c1prim) c2prim in
+      List.iter add  [cmyeqbool ,CCeqbZ];
+      tbl2
+
+    let op_tblprim =lazy(op_tbl2 ())
+
+   
+
+    (**********)
 
     let of_coq rt ro reify env sigma c =
       let op_tbl = Lazy.force op_tbl in
+      let op_tblprim=Lazy.force op_tblprim in
       let get_cst c =
 	try Hashtbl.find op_tbl c with Not_found -> CCunknown
         
       in
+      (*
+      let val_get_cst_user c =  match get_cst c with
+	|CCeqbZ  -> mk_bop (BO_eq TZ) args
+	|CCunknown -> mk_unknown c args  (Retyping.get
+      *)   
+      let get_user_cst c =
+	try Some (Hashtbl.find op_tblprim c ) with Not_found -> None
+	  in 
+     
       let mk_cop op = get reify (Acop op) in
-      let rec mk_hatom h =
+      let rec mk_hatom h  =
 	let c, args = Term.decompose_app h in
-	match get_cst c with
+	match  get_user_cst c with
+	|Some x  -> mk_bop (BO_eq TZ) args
+	|None -> match get_cst c with
           | CCxH -> mk_cop CO_xH
           | CCZ0 -> mk_cop CO_Z0
           | CCxO -> mk_uop UO_xO args
@@ -640,8 +665,7 @@ module Atom =
           | CCeqb -> mk_bop (BO_eq Tbool) args
           | CCeqbP -> mk_bop (BO_eq Tpositive) args
           | CCeqbZ -> mk_bop (BO_eq TZ) args
-	  |CCmyeqbool ->mk_bop(BO_eq TZ) args
-	  | CCunknown -> mk_unknown c args (Retyping.get_type_of env sigma h)
+	  | CCunknown ->mk_unknown c args (Retyping.get_type_of env sigma h)
 
       and mk_uop op = function
         | [a] -> let h = mk_hatom a in get reify (Auop (op,h))
@@ -654,19 +678,21 @@ module Atom =
           get reify (Abop (op,h1,h2))
         | _ -> assert false
 
-      and mk_unknown c args ty =
+      and mk_unknown c args ty  =
 	let hargs=Array.of_list(List.map mk_hatom args) in
-	let op =
- 
+
 	  (*ro:reify *)
-          try Op.of_coq ro c
-          with | Not_found ->
+      
+	      let op =
+              try( Op.of_coq ro c)  
+              with | Not_found ->
 	   
+		  
             let targs = Array.map type_of hargs in
             let tres = Btype.of_coq rt ty in
             Op.declare ro c targs tres in
- get reify (Aapp (op,hargs)) in
-
+	    get reify (Aapp (op,hargs)) in
+           
 	  mk_hatom c 
 
 
