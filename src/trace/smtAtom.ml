@@ -617,7 +617,7 @@ module Atom =
     let op_tbl2 () =
       let tbl2 = Hashtbl.create 40 in
       let add (c1prim ,c2prim) =Hashtbl.add tbl2 (Lazy.force c1prim) c2prim in
-      List.iter add  [cmyeqbool ,CCeqbZ];
+      List.iter add  [cmyeqbool ,CCeqbZ;];
       tbl2
 
     let op_tblprim =lazy(op_tbl2 ())
@@ -640,14 +640,15 @@ module Atom =
       *)   
       let get_user_cst c =
 	try Some (Hashtbl.find op_tblprim c ) with Not_found -> None
-	  in 
+      in
+     
      
       let mk_cop op = get reify (Acop op) in
-      let rec mk_hatom h  =
-	let c, args = Term.decompose_app h in
-	match  get_user_cst c with
-	|Some x  -> mk_bop (BO_eq TZ) args
-	|None -> match get_cst c with
+    
+	   
+   let rec   mk_hatom h  =
+     let c, args = Term.decompose_app h in
+       let  f x = match x with  
           | CCxH -> mk_cop CO_xH
           | CCZ0 -> mk_cop CO_Z0
           | CCxO -> mk_uop UO_xO args
@@ -666,7 +667,14 @@ module Atom =
           | CCeqbP -> mk_bop (BO_eq Tpositive) args
           | CCeqbZ -> mk_bop (BO_eq TZ) args
 	  | CCunknown ->mk_unknown c args (Retyping.get_type_of env sigma h)
+       in
+       match  get_user_cst c with
+	|Some x  -> f x 
+	
+	|None -> f (get_cst c )
 
+	   
+	  
       and mk_uop op = function
         | [a] -> let h = mk_hatom a in get reify (Auop (op,h))
         | _ -> assert false
