@@ -13,7 +13,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-Add Rec LoadPath "." as SMTCoq.
+Add Rec LoadPath "/users/vals/bousalem/tools/github.com/aminsk/smtcoq/src" as SMTCoq.
 
 Require Import Bool List Int63 PArray.
 Require Import Misc State.
@@ -23,12 +23,17 @@ Local Open Scope int63_scope.
 
 Hint Unfold is_true.
 
-Definition  myeqbool  :=Zeq_bool.
+
+
 
 
  
-(* Remark: I use Notation instead of Definition du eliminate conversion check during the type checking *)
+(* Remark: I use Notation instead of Definition to  eliminate conversion check during the type checking *)
 Notation atom := int (only parsing).
+
+(***********************************************************
+                       module form
+****************************************************)
 
 Module Form.
 
@@ -57,6 +62,9 @@ Module Form.
 
   Lemma is_Ffalse_correct : forall h, is_Ffalse h -> h = Ffalse.
   Proof. destruct h;trivial;discriminate. Qed.
+
+
+  (*********************************section d'interpretation************************)
 
   Section Interp.
     Variable interp_atom : atom -> bool.
@@ -272,6 +280,11 @@ Section Unit_typ_eqb.
 End Unit_typ_eqb.
 (* End TODO *)
 
+
+(*****************************************************
+                               module Typ
+ *****************************************************)
+
 Module Typ.
 
   Notation index := int (only parsing).
@@ -283,10 +296,10 @@ Module Typ.
   | Tpositive : type.
 
   Definition ftype := (list type * type)%type.
-
+(***les types sont interpretés comme coq types **)
   Section Interp.
 
-    Variable t_i : PArray.array typ_eqb.
+    Variable t_i : array typ_eqb.
     (*interpreter les types*)
 
     Definition interp t :=
@@ -302,21 +315,17 @@ Module Typ.
     Definition interp_ftype (t:ftype) :=
       List.fold_right (fun dom codom =>interp dom -> codom)
                       (interp (snd t)) (fst t).
-
-
-
-    
-
-    (* Boolean equality over interpretation of a btype *)
+                      (* Boolean equality over interpretation of a btype *)
+                      
     Section Interp_Equality.
 
-
-      Definition i_eqb (t:type) : interp t -> interp t -> bool :=
+      Definition i_eqb (t:type)  : interp t -> interp t -> bool :=
         match t with
         | Tindex i => (t_i.[i]).(te_eqb)
         | TZ => Zbool.Zeq_bool
         | Tbool => Bool.eqb
         | Tpositive => Peqb
+  
         end.
         
       Lemma i_eqb_spec : forall t x y, i_eqb t x y <-> x = y.
@@ -351,21 +360,26 @@ Module Typ.
      objets de type B
      On montre que cette fonction réfléchit l'égalité de Coq. *)
 
-  Section Cast.
+Section Cast.
+  (****type coersion :to infer the type of an application ,we observ a boolean equality between the domain of the function and the type of its arguments is sufficient*)
 
   (* L'inductif cast_result spécifie si deux btype sont égaux (Cast) ou
      non (NoCast). Dans le cas où ils sont égaux, une fonction permet de
      passer de l'un à l'autre. *)
 
     Inductive cast_result (A B: type) : Type :=
+      (*map an object of some type P A to P B*)
     | Cast (k: forall P, P A -> P B)
     | NoCast.
 
     Implicit Arguments Cast [A B].
     Implicit Arguments NoCast [A B].
 
+    (*c'est pour les types égaux donc ça sera la meme chose (identité) *)
     Notation idcast := (Cast (fun P x => x)).
     (* La fonction cast calcule cast_result *)
+    (*return Nocast if its arguments are different *)
+    
 
     Definition cast (A B: type) : cast_result A B :=
       match A as C, B as D return cast_result C D with
@@ -483,14 +497,27 @@ Proof.
 Qed.
 (* End move *)
 
+
+
+
+
+
+
+
+        (*******************************************
+                    module atom
+       ******** ************************************)
+
 Module Atom.
 
   Notation func := int (only parsing).
  
+  
   Inductive cop : Type := 
    | CO_xH
    | CO_Z0.
-
+  
+ 
   Inductive unop : Type :=
    | UO_xO
    | UO_xI
@@ -506,13 +533,12 @@ Module Atom.
    | BO_Zle
    | BO_Zge
    | BO_Zgt
-   | BO_eq (_ : Typ.type).
+   | BO_eq (_ : Typ.type) .
 
   Inductive nop : Type :=
    | NO_distinct (_ : Typ.type).
 
   Notation hatom := int (only parsing).
- 
   Inductive atom : Type :=
    | Acop (_: cop)
    | Auop (_ : unop) (_:hatom)
@@ -524,13 +550,16 @@ Module Atom.
   (* Generic predicates and operations *)
 
   (** Equality *)
-  Definition cop_eqb o o' :=
-   match o, o' with
+ 
+
+  Definition cop_eqb o o'   :=
+   match o , o'  with
    | CO_xH, CO_xH 
    | CO_Z0, CO_Z0 => true
-   | _,_ => false
-   end.
-
+   | _ , _ =>false
+    end.
+  
+                                                                                   
   Definition uop_eqb o o' :=
    match o, o' with
    | UO_xO, UO_xO 
@@ -550,7 +579,8 @@ Module Atom.
    | BO_Zle, BO_Zle
    | BO_Zge, BO_Zge
    | BO_Zgt, BO_Zgt => true
-   | BO_eq t, BO_eq t' => Typ.eqb t t'
+   | BO_eq t, BO_eq t'=> Typ.eqb t t'
+
    | _,_ => false
    end.
 
@@ -631,6 +661,8 @@ Module Atom.
     v_val : I v_type
   }.
 
+
+  (****typing interpretation :in coq types **)
   Section Typing_Interp.
     Variable t_i : PArray.array typ_eqb.
 
@@ -666,11 +698,19 @@ Module Atom.
     Section Typ_Aux.
       Variable get_type : hatom -> Typ.type.
 
+      (******user defenition of constant CO_xH*****)
+     (* Definition my_cop_H_list :=  "My_CO_xH"::"U_CO_xH".
+      Definition my_cop_Z_list := "My_CO_xZ"::"U_CO_xZ".*)
+                                                                 
       Definition typ_cop o := 
         match o with
         | CO_xH => Typ.Tpositive 
         | CO_Z0 => Typ.TZ
-        end.
+      
+             end.
+      
+
+        
 
       Definition typ_uop o :=
         match o with
@@ -691,6 +731,7 @@ Module Atom.
         | BO_Zge    => ((Typ.TZ,Typ.TZ), Typ.Tbool) 
         | BO_Zgt    => ((Typ.TZ,Typ.TZ), Typ.Tbool)
         | BO_eq t   => ((t,t),Typ.Tbool)
+       
         end.
 
       Definition typ_nop o :=
@@ -833,10 +874,10 @@ Module Atom.
           end
         end f.
 
-      Definition interp_cop o :=
+      Definition interp_cop o  :=
         match o with
         | CO_xH => Bval Typ.Tpositive xH
-        | CO_Z0 => Bval Typ.TZ Z0
+        | CO_Z0 =>  Bval Typ.TZ Z
         end.
 
       Definition interp_uop o :=    
@@ -858,6 +899,7 @@ Module Atom.
          | BO_Zge => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zge_bool
          | BO_Zgt => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zgt_bool
          | BO_eq t => apply_binop t t Typ.Tbool (Typ.i_eqb t_i t)
+         
          end.
 
       Fixpoint compute_interp ty acc l :=
@@ -1013,7 +1055,7 @@ Module Atom.
         exists (Zneg y); auto.
         exists (- y)%Z; auto.
         (* Binary operators *)
-        destruct op as [ | | | | | | |A]; intros [i| | | ]; simpl; try discriminate; unfold is_true; rewrite andb_true_iff; try (change (Typ.eqb (get_type h1) Typ.TZ = true /\ Typ.eqb (get_type h2) Typ.TZ = true) with (is_true (Typ.eqb (get_type h1) Typ.TZ) /\ is_true (Typ.eqb (get_type h2) Typ.TZ)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl).
+        destruct op as [| | | | | | | |A]; intros [i| | | ]; simpl; try discriminate; unfold is_true; rewrite andb_true_iff; try (change (Typ.eqb (get_type h1) Typ.TZ = true /\ Typ.eqb (get_type h2) Typ.TZ = true) with (is_true (Typ.eqb (get_type h1) Typ.TZ) /\ is_true (Typ.eqb (get_type h2) Typ.TZ)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl).
         exists (y1 + y2)%Z; auto.
         exists (y1 - y2)%Z; auto.
         exists (y1 * y2)%Z; auto.

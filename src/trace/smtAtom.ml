@@ -142,12 +142,13 @@ module Btype =
 
   end
 
-(** Operators *)
+(* Operators *)
+     
 
 type cop = 
    | CO_xH
    | CO_Z0
-
+  
 type uop =
    | UO_xO
    | UO_xI
@@ -190,24 +191,43 @@ type op =
 module Op =
 struct
     (*cC sont definit dans coqTerms.ml ,ils sont les cstes en caml des smt_modules*)
-    let c_to_coq = function
+
+    (*définir une liste de constante des utilisateurs*)
+  let user_cst_list =      [( mycxh ,
+		                CO_xH)]
+let c_to_coq =function
       | CO_xH -> Lazy.force cCO_xH
       | CO_Z0 -> Lazy.force cCO_Z0
 
+	 
     let c_type_of = function
       | CO_xH -> Tpositive
       | CO_Z0 -> TZ
 
-    let interp_cop = function
+    let rec interp_cop =function 
       | CO_xH -> Lazy.force cxH
       | CO_Z0 -> Lazy.force cZ0
 
+     
+    let rec  interp_cop user_cst_list = match user_cst_list with
+	[] -> interp_cop
+      |c::cs -> let cst_coq =   snd c
+		  in
+	          match cst_coq with
+	|CO_xH -> Lazy.force fst c 
+        |CO_Z0 -> Lazy.force fst c 
+	   ;interp_cop cs 
+
+
+      
+    
     let u_to_coq = function 
       | UO_xO -> Lazy.force cUO_xO
       | UO_xI -> Lazy.force cUO_xI
       | UO_Zpos -> Lazy.force cUO_Zpos 
       | UO_Zneg -> Lazy.force cUO_Zneg
       | UO_Zopp -> Lazy.force cUO_Zopp
+      
 
     let u_type_of = function 
       | UO_xO | UO_xI -> Tpositive
@@ -466,7 +486,7 @@ module Atom =
     let rec compute_int = function
       | Acop c ->
         (match c with
-          | CO_xH -> 1
+          | CO_xH  -> 1
           | CO_Z0 -> 0)
       | Auop (op,h) ->
         (match op with
@@ -595,7 +615,6 @@ module Atom =
       | CCeqb
       | CCeqbP
       | CCeqbZ
-      
       | CCunknown
 
 	  
@@ -633,11 +652,7 @@ module Atom =
 	try Hashtbl.find op_tbl c with Not_found -> CCunknown
         
       in
-      (*
-      let val_get_cst_user c =  match get_cst c with
-	|CCeqbZ  -> mk_bop (BO_eq TZ) args
-	|CCunknown -> mk_unknown c args  (Retyping.get
-      *)   
+    
       let get_user_cst c =
 	try Some (Hashtbl.find op_tblprim c ) with Not_found -> None
       in
