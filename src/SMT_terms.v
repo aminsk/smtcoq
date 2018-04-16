@@ -23,11 +23,45 @@ Local Open Scope int63_scope.
 
 Hint Unfold is_true.
 
+Print positive.
+Print Z.
+Print nat.
+Print option.
+
+Fixpoint myeqbool_aux (x y :positive ) := match (x, y) with (xH, xH) => true | (xI x, xI y) => myeqbool_aux x y | (xO x, xO y) => myeqbool_aux x y | (_, _) => false end.
+Definition myeqbool (x y : Z) := match (x, y) with (Z0, Z0) => true | (Zpos x, Zpos y) => myeqbool_aux x y | (Zneg x, Zneg y) => myeqbool_aux x y | (_, _) => false end.
+
+Lemma myeqbool_aux_refl : forall x, myeqbool_aux x x.
+Proof.
+  induction x.
+  apply IHx.
+  apply IHx.
+  reflexivity.
+Qed.
 
 
 
+Lemma myeqbool_refl : forall x, myeqbool x x.
+Proof.
+  intro x.
+  destruct x.
+  reflexivity.
+  unfold myeqbool.
+  apply myeqbool_aux_refl.
+  unfold myeqbool.
+  apply myeqbool_aux_refl.
+Qed.  
 
- 
+
+Print Zeq_bool.
+
+(*Definition myeqbool :=fun x y : Z =>
+match (x ?= y)%Z with
+| Eq => true
+| Lt => false
+| Gt => false
+end.
+*)
 (* Remark: I use Notation instead of Definition to  eliminate conversion check during the type checking *)
 Notation atom := int (only parsing).
 
@@ -290,7 +324,7 @@ Module Typ.
   Notation index := int (only parsing).
 
   Inductive type :=
-  | Tindex : index -> type
+ (* | Tindex : index -> type *)
   | TZ : type
   | Tbool : type
   | Tpositive : type.
@@ -304,7 +338,7 @@ Module Typ.
 
     Definition interp t :=
       match t with
-      | Tindex i => (t_i.[i]).(te_carrier)
+     | Tindex i => (t_i.[i]).(te_carrier)
       | TZ => Z
       | Tbool => bool
       | Tpositive => positive
@@ -318,15 +352,28 @@ Module Typ.
                       (* Boolean equality over interpretation of a btype *)
                       
     Section Interp_Equality.
+     
+Record my_typ_eqb : Type := {
+  te_carrier : Type;
+  myeqbool : te_carrier -> te_carrier -> bool;
+ my_eqbool_reflect : forall x y, reflect (x = y) (myeqbool  x y)
+}.
 
-      Definition i_eqb (t:type)  : interp t -> interp t -> bool :=
+
+      Definition i_eqb (l : list my_typ_eqb) (t:type)  : interp t -> interp t -> bool :=
         match t with
-        | Tindex i => (t_i.[i]).(te_eqb)
-        | TZ => Zbool.Zeq_bool
+       (*Tindex i => (t_i.[i]).(te_eqb)*)  
+        | TZ =>myeqbool (hd l )
         | Tbool => Bool.eqb
         | Tpositive => Peqb
-  
+     
         end.
+
+(* Record typ_eqb : Type := Typ_eqb { *)
+(*   te_carrier : Type; *)
+(*   te_eqb : te_carrier -> te_carrier -> bool; *)
+(*   te_reflect : forall x y, reflect (x = y) (te_eqb x y) *)
+      
         
       Lemma i_eqb_spec : forall t x y, i_eqb t x y <-> x = y.
       Proof.
@@ -377,8 +424,7 @@ Section Cast.
 
     (*c'est pour les types égaux donc ça sera la meme chose (identité) *)
     Notation idcast := (Cast (fun P x => x)).
-    (* La fonction cast calcule cast_result *)
-    (*return Nocast if its arguments are different *)
+    (* La fonction cast calcule cast_result *)    (*return Nocast if its arguments are different *)
     
 
     Definition cast (A B: type) : cast_result A B :=
@@ -877,7 +923,7 @@ Module Atom.
       Definition interp_cop o  :=
         match o with
         | CO_xH => Bval Typ.Tpositive xH
-        | CO_Z0 =>  Bval Typ.TZ Z
+        | CO_Z0 =>  Bval Typ.TZ Z0
         end.
 
       Definition interp_uop o :=    
@@ -1055,7 +1101,7 @@ Module Atom.
         exists (Zneg y); auto.
         exists (- y)%Z; auto.
         (* Binary operators *)
-        destruct op as [| | | | | | | |A]; intros [i| | | ]; simpl; try discriminate; unfold is_true; rewrite andb_true_iff; try (change (Typ.eqb (get_type h1) Typ.TZ = true /\ Typ.eqb (get_type h2) Typ.TZ = true) with (is_true (Typ.eqb (get_type h1) Typ.TZ) /\ is_true (Typ.eqb (get_type h2) Typ.TZ)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl).
+        destruct op as [ | | | | | | |A]; intros [i| | | ]; simpl; try discriminate; unfold is_true; rewrite andb_true_iff; try (change (Typ.eqb (get_type h1) Typ.TZ = true /\ Typ.eqb (get_type h2) Typ.TZ = true) with (is_true (Typ.eqb (get_type h1) Typ.TZ) /\ is_true (Typ.eqb (get_type h2) Typ.TZ)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl).
         exists (y1 + y2)%Z; auto.
         exists (y1 - y2)%Z; auto.
         exists (y1 * y2)%Z; auto.
