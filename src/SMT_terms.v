@@ -28,29 +28,7 @@ Print Z.
 Print nat.
 Print option.
 
-Fixpoint myeqbool_aux (x y :positive ) := match (x, y) with (xH, xH) => true | (xI x, xI y) => myeqbool_aux x y | (xO x, xO y) => myeqbool_aux x y | (_, _) => false end.
-Definition myeqbool (x y : Z) := match (x, y) with (Z0, Z0) => true | (Zpos x, Zpos y) => myeqbool_aux x y | (Zneg x, Zneg y) => myeqbool_aux x y | (_, _) => false end.
 
-Lemma myeqbool_aux_refl : forall x, myeqbool_aux x x.
-Proof.
-  induction x.
-  apply IHx.
-  apply IHx.
-  reflexivity.
-Qed.
-
-
-
-Lemma myeqbool_refl : forall x, myeqbool x x.
-Proof.
-  intro x.
-  destruct x.
-  reflexivity.
-  unfold myeqbool.
-  apply myeqbool_aux_refl.
-  unfold myeqbool.
-  apply myeqbool_aux_refl.
-Qed.  
 
 
 Print Zeq_bool.
@@ -272,7 +250,7 @@ Module Form.
   End Interp.
 
 End Form.
-
+(**********pour debuguer sur myeqbool*********)
 (* TODO Move this *)
 Record typ_eqb : Type := Typ_eqb {
   te_carrier : Type;
@@ -324,13 +302,13 @@ Module Typ.
   Notation index := int (only parsing).
 
   Inductive type :=
- (* | Tindex : index -> type *)
+  | Tindex : index -> type 
   | TZ : type
   | Tbool : type
   | Tpositive : type.
 
   Definition ftype := (list type * type)%type.
-(***les types sont interpretés comme coq types **)
+
   Section Interp.
 
     Variable t_i : array typ_eqb.
@@ -338,7 +316,10 @@ Module Typ.
 
     Definition interp t :=
       match t with
-     | Tindex i => (t_i.[i]).(te_carrier)
+      (*les types sont interpretés comme coq types *)
+      (*the deep terms are those of the theories handled by the checker :congruence closure and linera integer arithmetic*)
+      (*there are possibly different uninterpreted types:this allow to deal with coq terms containing many different types not handled by the smt solver like user defined or higher order types*)
+      | Tindex i => (t_i.[i]).(te_carrier)(*type uninterpreter indexed by machine integers*)
       | TZ => Z
       | Tbool => bool
       | Tpositive => positive
@@ -352,23 +333,56 @@ Module Typ.
                       (* Boolean equality over interpretation of a btype *)
                       
     Section Interp_Equality.
-     
-Record my_typ_eqb : Type := {
+
+      (********************interpretation des Zeq de l'utilisateur ******************)
+ (*Fixpoint myeqbool_aux (x y :positive) := match (x, y) with (xH, xH) => true | (xI x, xI y) => myeqbool_aux x y | (xO x, xO y) => myeqbool_aux x y | (_, _) => false end.
+Definition myeqbool (x y : Z) := match (x, y) with (Z0, Z0) => true | (Zpos x, Zpos y) => myeqbool_aux x y | (Zneg x, Zneg y) => myeqbool_aux x y | (_, _) => false end.
+
+Lemma myeqbool_aux_refl : forall x, myeqbool_aux x x.
+Proof.
+  induction x.
+  apply IHx.
+  apply IHx.
+  reflexivity.
+Qed.
+
+Lemma myeqbool_refl : forall x, myeqbool x x.
+Proof.
+  intro x.
+  destruct x.
+  reflexivity.
+  unfold myeqbool.
+  apply myeqbool_aux_refl.
+  unfold myeqbool.
+  apply myeqbool_aux_refl.
+Qed.       
+  *)
+      Print Zeq_bool.
+ 
+ Record my_typ_eqb : Type := My_typ_eqb {
   te_carrier : Type;
-  myeqbool : te_carrier -> te_carrier -> bool;
- my_eqbool_reflect : forall x y, reflect (x = y) (myeqbool  x y)
+  my_eqbool : te_carrier -> te_carrier -> bool;
+  my_reflect : forall x y, reflect (x = y) (my_eqbool x y)
 }.
+      
 
+ Print my_typ_eqb.
 
-      Definition i_eqb (l : list my_typ_eqb) (t:type)  : interp t -> interp t -> bool :=
+Lemma refle x y: reflect (x = y) (Zeq_bool x y).
+  admit.
+  Qed.
+Definition l := Build_my_typ_eqb Z myeqbool refle.
+
+Print l.
+      Definition i_eqb  (t:type) l   : interp t -> interp t -> bool :=
         match t with
-       (*Tindex i => (t_i.[i]).(te_eqb)*)  
-        | TZ =>myeqbool (hd l )
+        |Tindex i => (t_i.[i]).(te_eqb)  
+        | TZ =>my_eqbool l
         | Tbool => Bool.eqb
         | Tpositive => Peqb
      
         end.
-
+(************************************************************************)
 (* Record typ_eqb : Type := Typ_eqb { *)
 (*   te_carrier : Type; *)
 (*   te_eqb : te_carrier -> te_carrier -> bool; *)
@@ -745,18 +759,15 @@ Module Atom.
       Variable get_type : hatom -> Typ.type.
 
       (******user defenition of constant CO_xH*****)
-     (* Definition my_cop_H_list :=  "My_CO_xH"::"U_CO_xH".
-      Definition my_cop_Z_list := "My_CO_xZ"::"U_CO_xZ".*)
+     
                                                                  
       Definition typ_cop o := 
         match o with
         | CO_xH => Typ.Tpositive 
         | CO_Z0 => Typ.TZ
       
-             end.
-      
-
-        
+          end.
+  
 
       Definition typ_uop o :=
         match o with
