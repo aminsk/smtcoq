@@ -31,15 +31,7 @@ Print option.
 
 
 
-Print Zeq_bool.
 
-(*Definition myeqbool :=fun x y : Z =>
-match (x ?= y)%Z with
-| Eq => true
-| Lt => false
-| Gt => false
-end.
-*)
 (* Remark: I use Notation instead of Definition to  eliminate conversion check during the type checking *)
 Notation atom := int (only parsing).
 
@@ -314,22 +306,48 @@ Module Typ.
     Variable t_i : array typ_eqb.
     (*interpreter les types*)
 
-    Definition interp t :=
+  (* Record my_typ_eqb : Type := Typ_eqb {
+  te_carrier : Type;
+  my_eqbool : te_carrier -> te_carrier -> bool;
+  my_reflect : forall x y, reflect (x = y) (my_eqbool x y)
+}.
+  *)   
+    
+ (* Definition  l := {|te_carrier :=Z ; te_eqb := Zeq_bool;  te_reflect  :=my_refl|}.*)
+ 
+    Definition interp t  :=
       match t with
       (*les types sont interpretés comme coq types *)
       (*the deep terms are those of the theories handled by the checker :congruence closure and linera integer arithmetic*)
       (*there are possibly different uninterpreted types:this allow to deal with coq terms containing many different types not handled by the smt solver like user defined or higher order types*)
       | Tindex i => (t_i.[i]).(te_carrier)(*type uninterpreter indexed by machine integers*)
-      | TZ => Z
+      | TZ =>(* te_carrier l*) Z
       | Tbool => bool
       | Tpositive => positive
       end.
 
     
+    Print Zeq_bool.
 
-    Definition interp_ftype (t:ftype) :=
-      List.fold_right (fun dom codom =>interp dom -> codom)
-                      (interp (snd t)) (fst t).
+    Record my_typ_eqb :={
+                          my_carr:= Z;
+                          myeqbool :my_carr -> my_carr -> bool;
+                         my_refl :forall x y ,reflect (x=y) (myeqbool x y)
+                        }.
+   
+   Definition myeqbool_list :=list my_typ_eqb.
+  Definition interp_myeqbool   myeqbool_list :=
+    match  myeqbool_list with
+      |  nil => Zeq_bool
+      |  x::l' => myeqbool x
+   end.
+      
+    
+    
+
+    Definition interp_ftype (t:ftype)  :=
+      List.fold_right (fun dom codom =>interp dom   -> codom)
+                      (interp (snd t) ) (fst t).
                       (* Boolean equality over interpretation of a btype *)
                       
     Section Interp_Equality.
@@ -357,27 +375,11 @@ Proof.
   apply myeqbool_aux_refl.
 Qed.       
   *)
-      Print Zeq_bool.
- 
- Record my_typ_eqb : Type := My_typ_eqb {
-  te_carrier : Type;
-  my_eqbool : te_carrier -> te_carrier -> bool;
-  my_reflect : forall x y, reflect (x = y) (my_eqbool x y)
-}.
       
-
- Print my_typ_eqb.
-
-Lemma refle x y: reflect (x = y) (Zeq_bool x y).
-  admit.
-  Qed.
-Definition l := Build_my_typ_eqb Z myeqbool refle.
-
-Print l.
-      Definition i_eqb  (t:type) l   : interp t -> interp t -> bool :=
+      Definition i_eqb   (t:type) myeqbool_list : interp t   -> interp t  -> bool :=
         match t with
         |Tindex i => (t_i.[i]).(te_eqb)  
-        | TZ =>my_eqbool l
+        | TZ =>interp_myeqbool myeqbool_list 
         | Tbool => Bool.eqb
         | Tpositive => Peqb
      
@@ -389,7 +391,7 @@ Print l.
 (*   te_reflect : forall x y, reflect (x = y) (te_eqb x y) *)
       
         
-      Lemma i_eqb_spec : forall t x y, i_eqb t x y <-> x = y.
+      Lemma i_eqb_spec : forall t x y, i_eqb  t myeqbool_list  x y  <-> x = y.
       Proof.
        destruct t;simpl;intros.
        symmetry;apply reflect_iff;apply te_reflect.
@@ -398,22 +400,22 @@ Print l.
        apply Peqb_eq.
       Qed.
 
-      Lemma reflect_i_eqb : forall t x y, reflect (x = y) (i_eqb t x y).
+      Lemma reflect_i_eqb : forall t x y, reflect (x = y) (i_eqb t myeqbool_list x y).
       Proof.
         intros;apply iff_reflect;symmetry;apply i_eqb_spec.
       Qed.
 
-      Lemma i_eqb_sym : forall t x y, i_eqb t x y = i_eqb t y x.
+      Lemma i_eqb_sym : forall t x y, i_eqb  t myeqbool_list  x y = i_eqb t myeqbool_list  y x.
       Proof.
-        intros t x y; case_eq (i_eqb t x y); case_eq (i_eqb t y x); auto.
-        change (i_eqb t x y = true) with (is_true (i_eqb t x y)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t x x); inversion H; [rewrite <- H0 in H1; discriminate|elim H2; auto].
-        change (i_eqb t y x = true) with (is_true (i_eqb t y x)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t x x); inversion H; [rewrite <- H0 in H2; discriminate|elim H1; auto].
+        intros t x y; case_eq (i_eqb t myeqbool_list x y); case_eq (i_eqb t myeqbool_list y x); auto.
+        change (i_eqb t myeqbool_list  x y = true) with (is_true (i_eqb t myeqbool_list x y)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t x x); inversion H; [rewrite <- H0 in H1; discriminate|elim H2; auto].
+        change (i_eqb t myeqbool_list y x = true) with (is_true (i_eqb t myeqbool_list y x)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t x x); inversion H; [rewrite <- H0 in H2; discriminate|elim H1; auto].
       Qed.
 
     End Interp_Equality.
 
   End Interp.
-
+ 
   (* Plutôt que de tester l'égalité entre deux btypes dans Prop, on
      écrit une fonction calculant:
      - si deux btype A et B sont égaux
@@ -571,6 +573,13 @@ Qed.
 Module Atom.
 
   Notation func := int (only parsing).
+  Lemma my_refl x y: reflect (x = y) (Zeq_bool x y).
+  admit.
+Qed.
+  
+    
+Definition  l' := {|te_carrier :=Z ; te_eqb := Zeq_bool;  te_reflect  :=my_refl|}.
+About l.
  
   
   Inductive cop : Type := 
@@ -716,20 +725,25 @@ Module Atom.
   
   (** Typing and interpretation *)
   
-  Record val (t:Type) (I:t -> Type) := Val {
-    v_type : t;
-    v_val : I v_type
+  Record val (t:Type) (I: t -> typ_eqb -> Type)  := Val {
+    v_type : t;                                                     
+    v_val : I v_type l'  
   }.
 
 
   (****typing interpretation :in coq types **)
   Section Typing_Interp.
     Variable t_i : PArray.array typ_eqb.
+   
+  
+   
 
-    Local Notation interp_t := (Typ.interp t_i).
+    Local Notation interp_t := (Typ.interp t_i l').
     Local Notation interp_ft := (Typ.interp_ftype t_i).
-
-    Definition bval := val Typ.type interp_t.
+    Print interp_t.
+    About l'.
+    About interp_t .
+    Definition bval := val Typ.type interp_t .
     Definition Bval := Val Typ.type interp_t.
     Definition tval := val Typ.ftype interp_ft.
     Definition Tval := Val Typ.ftype interp_ft.
