@@ -95,6 +95,11 @@ module Btype =
       reify.count <- reify.count + 1;
       res
 
+
+
+
+	
+
     let of_coq reify t =
       try
         Hashtbl.find reify.tbl t
@@ -192,9 +197,10 @@ module Op =
 struct
     (*cC sont definit dans coqTerms.ml ,ils sont les cstes en caml des smt_modules*)
 
-    (*définir une liste de constante des utilisateurs*)
-  let user_cst_list =      [( mycxh ,
-		                CO_xH)]
+(*définir une liste de constante des utilisateurs*)
+
+ 
+    
 let c_to_coq =function
       | CO_xH -> Lazy.force cCO_xH
       | CO_Z0 -> Lazy.force cCO_Z0
@@ -204,22 +210,15 @@ let c_to_coq =function
       | CO_xH -> Tpositive
       | CO_Z0 -> TZ
 
-    let rec interp_cop =function 
+    let  interp_cop =function 
       | CO_xH -> Lazy.force cxH
       | CO_Z0 -> Lazy.force cZ0
 
      
-    let rec  interp_cop user_cst_list = match user_cst_list with
-	[] -> interp_cop
-      |c::cs -> let cst_coq =   snd c
-		  in
-	          match cst_coq with
-	|CO_xH -> Lazy.force fst c 
-        |CO_Z0 -> Lazy.force fst c 
-	   ;interp_cop cs 
+    
 
-
-      
+    (***********user constante interpretation****************)
+	 
     
     let u_to_coq = function 
       | UO_xO -> Lazy.force cUO_xO
@@ -245,7 +244,14 @@ let c_to_coq =function
       | UO_Zpos -> Lazy.force cZpos
       | UO_Zneg -> Lazy.force cZneg
       | UO_Zopp -> Lazy.force copp
-
+	 
+    (**************user constantes for binop***************)
+  let op_tbl =
+    let tbl = Hashtbl.create 40 in
+    let add (c1pri ,c2pri) = Hashtbl.add tbl c1pri c2pri in
+    List.iter add [BO_eq TZ, cmyeqbool];
+    tbl
+        
     let eq_tbl = Hashtbl.create 17 
 
     let eq_to_coq t =
@@ -279,17 +285,34 @@ let c_to_coq =function
       | Tbool -> Lazy.force ceqb
       | Tpositive -> Lazy.force ceqbP
       | Tindex i -> mklApp cte_eqb [|i.hval|]
+	  (******************************************interpretation des cstes user***********)
 
-    let interp_bop = function
-      | BO_Zplus -> Lazy.force cadd
+
+      
+
+      let  interp_bop c =
+        let get_user_cst c =
+	    try Some(Hashtbl.find op_tbl c)
+	    with Not_found -> None in
+          match get_user_cst c with
+	    |Some x -> Lazy.force x
+	    |None -> match c with
+	      | BO_Zplus -> Lazy.force cadd
       | BO_Zminus -> Lazy.force csub
       | BO_Zmult -> Lazy.force cmul
       | BO_Zlt -> Lazy.force cltb
       | BO_Zle -> Lazy.force cleb
       | BO_Zge -> Lazy.force cgeb
       | BO_Zgt -> Lazy.force cgtb
-      | BO_eq t -> interp_eq t
+      | BO_eq t -> interp_eq t 
+	      
+	     
+     
+  
 
+
+	 
+	 
     let n_to_coq = function
       | NO_distinct t -> mklApp cNO_distinct [|Btype.to_coq t|]
 
@@ -626,7 +649,7 @@ module Atom =
           cxO,CCxO; cxI,CCxI; cZpos,CCZpos; cZneg,CCZneg; copp,CCZopp;
           cadd,CCZplus; csub,CCZminus; cmul,CCZmult; cltb,CCZlt;
           cleb,CCZle; cgeb,CCZge; cgtb,CCZgt; ceqb,CCeqb; ceqbP,CCeqbP;
-          ceqbZ, CCeqbZ  
+	 ceqbZ, CCeqbZ
         ];
       tbl
 
@@ -636,7 +659,7 @@ module Atom =
     let op_tbl2 () =
       let tbl2 = Hashtbl.create 40 in
       let add (c1prim ,c2prim) =Hashtbl.add tbl2 (Lazy.force c1prim) c2prim in
-      List.iter add  [cmyeqbool ,CCeqbZ;];
+      List.iter add  [cmyeqbool, CCeqbZ];
       tbl2
 
     let op_tblprim =lazy(op_tbl2 ())
