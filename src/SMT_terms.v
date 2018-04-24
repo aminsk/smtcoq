@@ -43,6 +43,7 @@ Module Form.
 
   Notation fargs := (array _lit) (only parsing).
 
+ 
   Inductive form : Type :=
   | Fatom (_:atom)
   | Ftrue
@@ -349,15 +350,21 @@ Proof.
   apply myeqbool_aux_refl.
 Qed.       
   *)
-(*rajouter une liste de binop definit en bas et tester si on trouve dedans sinon en garde autre fonction*)
-      Definition i_eqb (t:type) : interp t -> interp t -> bool :=
-        match t with
+      (*rajouter une liste de binop definit en bas et tester si on trouve dedans sinon en garde autre fonction*)
+      Variable A:Type.
+     Variable  P: A -> Type.
+     Variable user_list :list(sigT P).
+    Definition i_eqb (t:type) (*user_list*): interp t -> interp t -> bool :=
+   (* match user_list with
+     |x:: l' =>projT2 x          
+     | nil=>*)
+      match t with
         |Tindex i => (t_i.[i]).(te_eqb)  
         | TZ => Zeq_bool
         | Tbool => Bool.eqb
         | Tpositive => Peqb
-     
-        end.
+       end 
+    end.
 (************************************************************************)
 (* Record typ_eqb : Type := Typ_eqb { *)
 (*   te_carrier : Type; *)
@@ -368,7 +375,8 @@ Qed.
          admit.
          Qed.*)
      
-      Lemma i_eqb_spec : forall t x y, i_eqb t x y  <-> x = y.
+    Lemma i_eqb_spec : forall t x y, i_eqb t    x y  <-> x = y.
+    
       Proof.
        destruct t;simpl;intros.
        symmetry;apply reflect_iff;apply te_reflect.
@@ -771,17 +779,20 @@ Module Atom.
         match o with
           | NO_distinct t => (t,Typ.Tbool)
         end.
-
+(*************************pour égalité boolenne*******************************************)
   Variable myeqbool : Z -> Z -> bool.
   Variable my_refl : forall x y ,reflect (x=y) (myeqbool x y).
   Definition myeqbool_record : typ_eqb :=
     {| te_carrier := Z; te_eqb := myeqbool; te_reflect := my_refl |}.
 
-  Definition user_binop : list {o : binop
+  
+  Definition user_binop_eq : list {o : binop
                                     & interp_t (fst (fst (typ_bop o)))
                                     -> interp_t (snd (fst (typ_bop o)))
                                     -> interp_t (snd (typ_bop o)) } :=
     cons (existT _ (BO_eq Typ.TZ) myeqbool) nil.
+  
+About user_binop_eq.
 
       Fixpoint check_args (args:list hatom) (targs:list Typ.type) :=
         match args, targs with
@@ -936,7 +947,8 @@ Module Atom.
         | UO_Zneg => apply_unop Typ.Tpositive Typ.TZ Zneg
         | UO_Zopp => apply_unop Typ.TZ Typ.TZ Zopp
         end.
-
+      About Typ.i_eqb.
+      About user_binop_eq.
       Definition interp_bop o  :=
          match o with
          | BO_Zplus => apply_binop Typ.TZ Typ.TZ Typ.TZ Zplus
