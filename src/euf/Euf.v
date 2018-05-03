@@ -140,18 +140,21 @@ Section certif.
     end.
 
   Section Proof.
-
     Variables (t_i : array typ_eqb)
               (t_func : array (Atom.tval t_i))
+              (t_list:list {o : Atom.binop & Atom.binop_param t_i o})
               (ch_atom : Atom.check_atom t_atom)
               (ch_form : Form.check_form t_form)
-              (wt_t_atom : Atom.wt t_i t_func t_atom).
+              (wt_t_atom : Atom.wt t_i t_func t_list t_atom ).
+   
 
+    
+    
     Local Notation interp_hatom :=
-      (Atom.interp_hatom t_i t_func t_atom).
+      (Atom.interp_hatom t_i t_func t_list t_atom).
 
     Local Notation interp_form_hatom :=
-      (Atom.interp_form_hatom t_i t_func t_atom).
+      (Atom.interp_form_hatom t_i t_func t_list t_atom).
 
     Local Notation rho :=
       (Form.interp_state_var interp_form_hatom t_form).
@@ -164,7 +167,7 @@ Section certif.
 
     Let def_t_form : default t_form = Form.Ftrue.
     Proof.
-      destruct (Form.check_form_correct interp_form_hatom _ ch_form) as [H _]; destruct H; auto.
+      destruct (Form.check_form_correct  interp_form_hatom _ ch_form) as [H _]; destruct H; auto.
     Qed.
 
     Let wf_t_form : Form.wf t_form.
@@ -184,7 +187,7 @@ Section certif.
     Qed.
     Hint Resolve valid_C_true.
 
-    Local Notation interp := (Atom.interp t_i t_func t_atom).
+    Local Notation interp := (Atom.interp t_i t_func t_list t_atom).
 
     Lemma wf_interp_form : forall x,
        rho x = Form.interp interp_form_hatom t_form (t_form.[x]).
@@ -194,7 +197,7 @@ Section certif.
     Qed.
 
     Local Notation get_type :=
-        (Atom.get_type t_i t_func t_atom).
+        (Atom.get_type t_i t_func t_list t_atom).
 
     Local Notation check_type :=
         (Atom.check_aux t_i t_func get_type).
@@ -202,10 +205,10 @@ Section certif.
     Lemma get_eq_interp :
       forall (l:_lit) (f:Atom.hatom -> Atom.hatom -> C.t),
        (forall xa, t_form.[Lit.blit l] = Form.Fatom xa ->
-        forall t a b, t_atom.[xa] = Atom.Abop (Atom.BO_eq t) a b ->
+        forall t a b , t_atom.[xa] = Atom.Abop (Atom.BO_eq t) a b ->
         rho (Lit.blit l) =
           Atom.interp_bool t_i
-           (Atom.apply_binop t_i t t Typ.Tbool (Typ.i_eqb t_i t)
+           (Atom.apply_binop t_i t t Typ.Tbool (Typ.i_eqb t_i t (Atom.find_eqs t_i t_list))
               (interp_hatom a) (interp_hatom b)) ->
         Typ.eqb (get_type a) t -> Typ.eqb (get_type b) t ->
         C.interp rho (f a b)) ->
@@ -241,8 +244,8 @@ Section certif.
 
     Lemma interp_binop_eqb_sym :
       forall u a b,
-      Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u) a b =
-      Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u) b a.
+      Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u (Atom.find_eqs t_i t_list)) a b =
+      Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u (Atom.find_eqs t_i t_list)) b a.
     Proof.
       unfold Atom.apply_binop;simpl;intros u (ta,va) (tb,vb).
       destruct (Typ.cast ta u);destruct (Typ.cast tb u);trivial.
@@ -253,20 +256,20 @@ Section certif.
     Qed.
 
     Lemma interp_binop_eqb_trans:
-      forall u a b c,
+      forall u a b c ,
       Typ.eqb (get_type a) u -> Typ.eqb (get_type b) u -> Typ.eqb (get_type c) u ->
       Atom.interp_bool t_i
-        (Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u)
+        (Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i  u (Atom.find_eqs t_i t_list))
            (interp_hatom a) (interp_hatom b)) ->
       Atom.interp_bool t_i
-        (Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u)
+        (Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u (Atom.find_eqs t_i t_list))
            (interp_hatom b) (interp_hatom c)) ->
       Atom.interp_bool t_i
-        (Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u)
+        (Atom.apply_binop t_i u u Typ.Tbool (Typ.i_eqb t_i u (Atom.find_eqs t_i t_list))
            (interp_hatom a) (interp_hatom c)).
     Proof.
       intros u a b c Ha Hb Hc.
-      generalize (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom a), (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom b), (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom c). rewrite Typ.eqb_spec in Ha. rewrite Typ.eqb_spec in Hb. rewrite Typ.eqb_spec in Hc. unfold Atom.get_type in Ha, Hb, Hc. rewrite Ha, Hb, Hc. intros [va HHa] [vb HHb] [vc HHc].
+      generalize (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom a), (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom b), (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom c). rewrite Typ.eqb_spec in Ha. rewrite Typ.eqb_spec in Hb. rewrite Typ.eqb_spec in Hc. unfold Atom.get_type in Ha, Hb, Hc. rewrite Ha, Hb, Hc. intros [va HHa] [vb HHb] [vc HHc].
       unfold Atom.interp_hatom.
       rewrite HHa, HHb, HHc;simpl;rewrite Typ.cast_refl.
       unfold Atom.interp_bool;simpl.
@@ -342,7 +345,7 @@ Section certif.
       rewrite H1.
       unfold Atom.interp_bool; simpl.
       rewrite e; simpl.
-      generalize (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom b). rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H3. rewrite H3. intros [vb HHb].
+      generalize (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom b). rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H3. rewrite H3. intros [vb HHb].
       unfold Atom.interp_hatom.
       rewrite HHb;simpl;rewrite Typ.cast_refl;simpl.
       rewrite !Typ.i_eqb_spec;trivial.
@@ -374,11 +377,11 @@ Section certif.
       rewrite Lit.interp_nlit;unfold Var.interp.
       case_eq (rho (Lit.blit i1));intros;simpl;[ | auto].
       apply H;constructor;trivial.
-      generalize (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom a), (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom b). rewrite Typ.eqb_spec in H3. rewrite Typ.eqb_spec in H4. unfold Atom.get_type in H3, H4. rewrite H3,H4. intros [va HHa] [vb HHb].
+      generalize (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom a), (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom b). rewrite Typ.eqb_spec in H3. rewrite Typ.eqb_spec in H4. unfold Atom.get_type in H3, H4. rewrite H3,H4. intros [va HHa] [vb HHb].
       revert H7;rewrite H2;unfold Atom.apply_binop; simpl.
       unfold Atom.interp_hatom.
       rewrite HHa, HHb;simpl;rewrite Typ.cast_refl;simpl.
-      intros W;change (is_true (Typ.i_eqb t_i t va vb)) in W.
+      intros W;change (is_true (Typ.i_eqb t_i t (Atom.find_eqs t_i t_list) va vb)) in W.
       rewrite Typ.i_eqb_spec in W.
       rewrite orb_true_iff, !andb_true_iff in H5;destruct H5 as
         [ [H5 H7] | [H5 H7]].
@@ -402,7 +405,7 @@ Section certif.
       apply build_congr_correct;intros.
       simpl;rewrite Lit.interp_lit, orb_false_r;unfold Var.interp.
       rewrite H1.
-      generalize (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom a), (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom b). rewrite Typ.eqb_spec in H2. rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H2, H3. rewrite H2,H3. intros [va HHa] [vb HHb].
+      generalize (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom a), (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom b). rewrite Typ.eqb_spec in H2. rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H2, H3. rewrite H2,H3. intros [va HHa] [vb HHb].
       unfold Atom.apply_binop;unfold Atom.interp_hatom;simpl.
       rewrite HHb, HHa. simpl.
       rewrite Atom.t_interp_wf in HHa; auto. rewrite H4 in HHa. simpl in HHa.
@@ -421,7 +424,7 @@ Section certif.
       apply build_congr_correct;intros.
       simpl;rewrite Lit.interp_lit, orb_false_r;unfold Var.interp.
       rewrite H1.
-      generalize (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom a), (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom b). rewrite Typ.eqb_spec in H2. rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H2, H3. rewrite H2,H3. intros [va HHa] [vb HHb].
+      generalize (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom a), (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom b). rewrite Typ.eqb_spec in H2. rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H2, H3. rewrite H2,H3. intros [va HHa] [vb HHb].
       unfold Atom.apply_binop. unfold Atom.interp_hatom;simpl.
       rewrite HHb, HHa;simpl.
       rewrite Atom.t_interp_wf in HHa; auto. rewrite H4 in HHa. simpl in HHa.
@@ -441,7 +444,7 @@ Section certif.
       apply build_congr_correct;intros.
       simpl;rewrite Lit.interp_lit, orb_false_r;unfold Var.interp.
       rewrite H1.
-      generalize (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom a), (Atom.check_aux_interp_hatom _ t_func _ wf_t_atom b). rewrite Typ.eqb_spec in H2. rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H2, H3. rewrite H2,H3. intros [va HHa] [vb HHb].
+      generalize (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom a), (Atom.check_aux_interp_hatom t_i t_func t_list t_atom wf_t_atom b). rewrite Typ.eqb_spec in H2. rewrite Typ.eqb_spec in H3. unfold Atom.get_type in H2, H3. rewrite H2,H3. intros [va HHa] [vb HHb].
       unfold Atom.apply_binop;unfold Atom.interp_hatom;simpl.
       rewrite HHb, HHa;simpl.
       rewrite Atom.t_interp_wf in HHa; auto. rewrite H4 in HHa. simpl in HHa.
