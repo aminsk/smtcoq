@@ -23,14 +23,6 @@ Local Open Scope int63_scope.
 
 Hint Unfold is_true.
 
-Print positive.
-Print Z.
-Print nat.
-Print option.
-
-About  Zneg.
-
-
 
 (* Remark: I use Notation instead of Definition to  eliminate conversion check during the type checking *)
 Notation atom := int (only parsing).
@@ -241,7 +233,6 @@ Module Form.
     Qed.
 
   End Interp.
-
 End Form.
 (**********pour debuguer sur myeqbool*********)
 (* TODO Move this *)
@@ -417,8 +408,6 @@ Section Cast.
       | Tbool => bool
       | Tpositive => positive
       end.
-
-
 
     Definition interp_ftype (t:ftype)  :=
       List.fold_right (fun dom codom =>interp dom   -> codom)
@@ -727,6 +716,7 @@ Module Atom.
   (****typing interpretation :in coq types **)
   Section Typing_Interp.
     Variable t_i : PArray.array typ_eqb.
+ 
 
     Local Notation interp_t := (Typ.interp t_i).
     Local Notation interp_ft := (Typ.interp_ftype t_i).
@@ -753,12 +743,12 @@ Module Atom.
     Qed.
 
     (* Interprétation d'une fonction*)
-    Variable t_func : PArray.array tval.
-
+    
+Variable t_func : PArray.array tval.
     (** Type checking of atom assuming an type for hatom *)
     Section Typ_Aux.
       Variable get_type : hatom -> Typ.type.
-
+      
       (******user defenition of constant CO_xH*****)
      
                                                                  
@@ -889,10 +879,13 @@ Module Atom.
         (* Application *)
         case (v_type Typ.ftype interp_ft (t_func .[ f])); intros; apply check_args_dec.
       Qed.
-
+      
+     
     End Typ_Aux.
-
-    Definition binop_param (o : binop) :=
+    (**************************** 
+                     ***************************************
+                    ******************************************)
+  Definition binop_param (o : binop) :=
       match o with
       | BO_eq t => typ_eqb_param (interp_t t)
       | _ => interp_t (fst (fst (typ_bop o)))
@@ -901,7 +894,6 @@ Module Atom.
       end.
 
     Variable user_binop : list {o : binop & binop_param o}.
-    
     Fixpoint find_eqs (l : list {o : binop & binop_param o})
       : list {u : Typ.type & typ_eqb_param (interp_t u)} :=
       match l with
@@ -909,13 +901,14 @@ Module Atom.
       | (existT (BO_eq t) param)::l' => (existT _ t param)::(find_eqs l')
       | _::l' => find_eqs l'
       end.
-
-
     (** Interpretation of hatom assuming an interpretation for atom *)
+      (* Interprétation d'une fonction*)
+
     Section Interp_Aux.
-
+     
       Variable interp_hatom : hatom -> bval.
-
+   
+  
    (*********definition d'une liste qui contient tous les operateurs bibaires definit par utilisateur***********)
 
       Definition apply_unop (t  r : Typ.type)
@@ -1067,6 +1060,7 @@ Module Atom.
         | Typ.Cast k => k _ v
         | _ => true
         end.
+    
 
 
       (* If an atom is well-typed, it has an interpretation *)
@@ -1389,7 +1383,7 @@ Module Atom.
       Qed.
 
     End Interp_get.
-
+ 
 
     Definition get_type t_atom :=
       get_type' (t_interp t_atom).
@@ -1397,7 +1391,7 @@ Module Atom.
     Definition wt t_atom :=
       let t_interp := t_interp t_atom in
       let get_type := get_type' t_interp in
-        PArray.forallbi (fun i h => check_aux get_type h (get_type i)) t_atom.
+      PArray.forallbi (fun i h => check_aux get_type h (get_type i)) t_atom.
 
 
     Definition interp_hatom (t_atom : PArray.array atom) :=
@@ -1411,7 +1405,7 @@ Module Atom.
       fun a => interp_bool (interp a).
 
   End Typing_Interp.
-
+  
   Definition check_atom t_atom :=
     match default t_atom with
       | Acop CO_xH => wf t_atom
