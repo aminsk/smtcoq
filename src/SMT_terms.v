@@ -908,6 +908,12 @@ Variable t_func : PArray.array tval.
              |(existT UO_Zpos op_param)::l' => Some (op_param )
              | _ ::l' => find_zpos o l'
             end.
+     Fixpoint find_zopp(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_Zopp) :=
+            match l with
+             |nil => None
+             |(existT UO_Zopp op_param)::l' => Some (op_param )
+             | _ ::l' => find_zopp o l'
+             end.
               
    Fixpoint find_zneg(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_Zneg) :=
             match l with
@@ -916,17 +922,12 @@ Variable t_func : PArray.array tval.
              | _ ::l' => find_zneg o l'
             end.
               
-   Fixpoint find_zopp(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_Zopp) :=
-            match l with
-             |nil => None
-             |(existT UO_Zopp op_param)::l' => Some (op_param )
-             | _ ::l' => find_zopp o l'
-             end.
+ 
     
     
    (************** interpretation pour les operateurs binaires **********)
     (********pour égalité boolenne*****************************)
-    Check typ_eqb_param.
+    
      Definition binop_param (o : binop) :=
       match o with
       | BO_eq t => typ_eqb_param (interp_t t)
@@ -1057,7 +1058,7 @@ Variable t_func : PArray.array tval.
         | CO_xH => Bval Typ.Tpositive xH
         | CO_Z0 =>  Bval Typ.TZ Z0
         end.
-
+         Print Zpos.
       Definition interp_uop o :=    
         match o with
         | UO_xO   =>match find_xO o user_unop with
@@ -1068,20 +1069,20 @@ Variable t_func : PArray.array tval.
                     |Some eq => apply_unop Typ.Tpositive Typ.Tpositive eq
                     |None =>  apply_unop Typ.Tpositive Typ.Tpositive xI
                      end
-        | UO_Zpos => match find_zopp o user_unop with
+       | UO_Zpos => match find_zopp o user_unop with
                    
                      |Some eq  => apply_unop Typ.Tpositive Typ.TZ eq
                      |None => apply_unop Typ.Tpositive Typ.TZ Zpos
-                     end
-                    
+                       end                 
         | UO_Zneg => match find_zneg o user_unop with
                      |Some eq => apply_unop Typ.Tpositive Typ.TZ eq
                      |None => apply_unop Typ.Tpositive Typ.TZ Zneg
                                          end 
-        | UO_Zopp =>match find_zopp o user_unop with
-                     |None => apply_unop Typ.TZ Typ.TZ Zopp
+        | UO_Zopp => match find_zopp o user_unop with
                      |Some eq => apply_unop Typ.TZ Typ.TZ eq
-                    end
+                     |None => apply_unop Typ.TZ Typ.TZ Zopp
+                   
+                    end                   
                       
        end.
 
