@@ -884,43 +884,25 @@ Variable t_func : PArray.array tval.
       
      
     End Typ_Aux.
+  
     (*******************************pour les operation uniaires définis par utilisateur**********)
+      Import EqNotations.
     Definition unop_param(o:unop) :=interp_t(fst(typ_uop o)) -> interp_t(snd(typ_uop o)).
     Variable user_unop :list {o:unop &  unop_param o}.
            
-   Fixpoint find_xO(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_xO) := 
+   Fixpoint find_unop (o:unop) (l:list{op:unop & unop_param op}) : option (unop_param o) := 
             match l with
              |nil => None
-             |(existT UO_xO op_param)::l' => Some (op_param )
-             | _ ::l' => find_xO o l'
+             |(existT o' op_param)::l' =>
+               match reflect_uop_eqb o' o with
+                     |ReflectT Heq => Some (rew Heq in op_param)
+                     |ReflectF _  => find_unop o l'
+               end
+
             end.
                
-   Fixpoint find_xI(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_xI) :=
-            match l with
-             |nil => None
-             |(existT UO_xI op_param)::l' => Some (op_param )
-             | _ ::l' => find_xI o l'
-            end.
-              
-   Fixpoint find_zpos(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_Zpos) :=
-            match l with
-             |nil => None
-             |(existT UO_Zpos op_param)::l' => Some (op_param )
-             | _ ::l' => find_zpos o l'
-            end.
-     Fixpoint find_zopp(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_Zopp) :=
-            match l with
-             |nil => None
-             |(existT UO_Zopp op_param)::l' => Some (op_param )
-             | _ ::l' => find_zopp o l'
-             end.
-              
-   Fixpoint find_zneg(o:unop)(l:list{op:unop & unop_param op}):option (unop_param UO_Zneg) :=
-            match l with
-             |nil => None
-             |(existT UO_Zneg op_param)::l' => Some (op_param )
-             | _ ::l' => find_zneg o l'
-            end.
+
+       
               
  
     
@@ -949,59 +931,16 @@ Variable t_func : PArray.array tval.
     (** Interpretation of hatom assuming an interpretation for atom *)
     (* Interprétation d'une fonction*)
     (*****************autres operateurs binaires************************)
-    Fixpoint find_zplus(o :binop)(l:list {op:binop  & binop_param op}) : option(binop_param BO_Zplus) :=
-                           match l with
-                           |nil => None
-                           |(existT BO_Zplus op_param)::l' => Some (op_param )
-                           |_ ::l' => find_zplus o l'
-                                          
-                           end.
-     Fixpoint find_zminus(o :binop)(l:list {op:binop  & binop_param op}) : option(binop_param BO_Zminus) :=
-                           match l with
-                           |nil => None
-                           |(existT BO_Zminus op_param)::l' => Some (op_param )
-                           |_ ::l' => find_zminus o l'
-                                          
-                             end.
-    Fixpoint find_zmult(o :binop)(l:list {op:binop  & binop_param op}) : option(binop_param BO_Zmult ) :=
-                           match l with
-                           |nil => None
-                           |(existT BO_Zmult op_param)::l' => Some (op_param )
-                           |_ ::l' => find_zmult o l'
-                                          
-                             end.
-    Fixpoint find_zle(o :binop)(l:list {op:binop  & binop_param op}) : option(binop_param BO_Zle) :=
-                           match l with
-                           |nil => None
-                           |(existT BO_Zle op_param)::l' => Some (op_param )
-                           |_ ::l' => find_zle o l'
-                                          
-                             end.
-     Fixpoint find_zlt(o :binop)(l:list {op:binop  & binop_param op}) : option(binop_param BO_Zlt) :=
-                           match l with
-                           |nil => None
-                           |(existT BO_Zlt op_param)::l' => Some (op_param )
-                           |_ ::l' => find_zlt o l'
-                                          
-                             end.
-      Fixpoint find_zgt(o :binop)(l:list {op:binop  & binop_param op}) : option(binop_param BO_Zgt) :=
-                           match l with
-                           |nil => None
-                           |(existT BO_Zgt op_param)::l' => Some (op_param )
-                           |_ ::l' => find_zgt o l'
-                                          
-                             end.
-
-     
-      Fixpoint find_zge(o :binop)(l:list {op:binop  & binop_param op}) : option(binop_param BO_Zge) :=
-                           match l with
-                           |nil => None
-                           |(existT BO_Zge op_param)::l' => Some (op_param )
-                           |_ ::l' => find_zge o l'
-                                          
-                             end.
-
-    
+  
+    Fixpoint find_bop (o :binop) (l:list {op:binop  & binop_param op}) : option (binop_param o) :=
+      match l with
+      | nil => None
+      | (existT o' op_param)::l' =>
+        match reflect_bop_eqb o' o with
+        | ReflectT Heq => Some (rew Heq in op_param)
+        | ReflectF _ => find_bop o l'
+        end
+      end.
     
     (****************************************************************************)
     
@@ -1013,7 +952,7 @@ Variable t_func : PArray.array tval.
       Variable interp_hatom : hatom -> bval.
    
   
-   (*********definition d'une liste qui contient tous les operateurs binaires definit par utilisateur***********)
+ (*definition d'une liste qui contient tous les operateurs binaires definit par utilisateur***)
 
       Definition apply_unop (t  r : Typ.type)
             (op : interp_t t -> interp_t r) (tv:bval) :=
@@ -1055,70 +994,63 @@ Variable t_func : PArray.array tval.
 
       Definition interp_cop o  :=
         match o with
-        | CO_xH => Bval Typ.Tpositive xH
-        | CO_Z0 =>  Bval Typ.TZ Z0
+        | CO_xH =>(*match find_xh o user_cop with
+                  |Some eq => Bval Typ.Tpositive eq
+                  |None =>*)  Bval Typ.Tpositive xH
+                   
+                                
+        | CO_Z0 => (*match find_zo o user_cop  with
+                   |Some eq =>Bval Typ.TZ eq
+                   |None =>*) Bval Typ.TZ Z0
+                    
         end.
-         Print Zpos.
-      Definition interp_uop o :=    
-        match o with
-        | UO_xO   =>match find_xO o user_unop with
-                    |Some eq => apply_unop Typ.Tpositive Typ.Tpositive eq
-                    |None => apply_unop Typ.Tpositive Typ.Tpositive xO
-                     end
-        | UO_xI   =>match find_xI o user_unop with
-                    |Some eq => apply_unop Typ.Tpositive Typ.Tpositive eq
-                    |None =>  apply_unop Typ.Tpositive Typ.Tpositive xI
-                     end
-       | UO_Zpos => match find_zopp o user_unop with
-                   
-                     |Some eq  => apply_unop Typ.Tpositive Typ.TZ eq
-                     |None => apply_unop Typ.Tpositive Typ.TZ Zpos
-                       end                 
-        | UO_Zneg => match find_zneg o user_unop with
-                     |Some eq => apply_unop Typ.Tpositive Typ.TZ eq
-                     |None => apply_unop Typ.Tpositive Typ.TZ Zneg
-                                         end 
-        | UO_Zopp => match find_zopp o user_unop with
-                     |Some eq => apply_unop Typ.TZ Typ.TZ eq
-                     |None => apply_unop Typ.TZ Typ.TZ Zopp
-                   
-                    end                   
+        
+      Definition interp_uop (o : unop) := apply_unop (fst(typ_uop o))(snd (typ_uop o))                                     match find_unop o user_unop  with
+      |Some op => op
+      |None =>
+         match o with                                                   
+        | UO_xO   =>  xO
+        | UO_xI   =>  xI           
+        | UO_Zpos => Zpos                  
+        | UO_Zneg => Zneg 
+        | UO_Zopp => Zopp         
+         end                   
                       
        end.
 
-             
-      Definition interp_bop (o :binop) :=                                          
-        match o with
-        |BO_Zplus => match find_zplus o user_binop with
-                     |Some eq  => apply_binop Typ.TZ Typ.TZ Typ.TZ eq
-                     |None => apply_binop Typ.TZ Typ.TZ Typ.TZ Zplus
-                     end
-        |BO_Zminus  => match find_zminus o user_binop with
-                      |Some eq  => apply_binop Typ.TZ Typ.TZ Typ.TZ eq
-                      |None => apply_binop Typ.TZ Typ.TZ Typ.TZ Zminus
-                       end          
-         | BO_Zmult =>  match find_zmult o user_binop with
-                      |Some eq  => apply_binop Typ.TZ Typ.TZ Typ.TZ eq
-                      |None => apply_binop Typ.TZ Typ.TZ Typ.TZ Zmult
-                       end
-          | BO_Zlt =>   match find_zlt o user_binop with
-                      |Some eq  => apply_binop Typ.TZ Typ.TZ Typ.Tbool eq
-                      |None => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zlt_bool
-                        end
-          | BO_Zle => match find_zle o user_binop with
-                      |Some eq  => apply_binop Typ.TZ Typ.TZ Typ.Tbool eq
-                      |None => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zle_bool
+      Definition param_to_interp (o : binop) :
+        binop_param o
+        -> interp_t (fst (fst (typ_bop o)))
+        -> interp_t (snd (fst (typ_bop o)))
+        -> interp_t (snd (typ_bop o))
+        :=
+          match o with
+          | BO_Zplus => id
+          | BO_Zminus => id
+          | BO_Zmult => id
+          | BO_Zlt => id
+          | BO_Zle => id
+          | BO_Zge => id
+          | BO_Zgt => id
+          | BO_eq t => (fun param => projT1 param)
+        end.
+
+      Definition interp_bop (o :binop) :=
+        apply_binop (fst (fst (typ_bop o))) (snd (fst (typ_bop o))) (snd (typ_bop o))
+                    match find_bop o user_binop with
+                    | Some op => param_to_interp o op
+                    | None =>
+                      match o with
+                      | BO_Zplus => Zplus
+                      | BO_Zminus => Zminus
+                      | BO_Zmult => Zmult
+                      | BO_Zlt => Zlt_bool
+                      | BO_Zle => Zle_bool
+                      | BO_Zge => Zge_bool
+                      | BO_Zgt => Zgt_bool
+                      | BO_eq t => Typ.i_eqb t_i t (find_eqs user_binop)
                       end
-          | BO_Zge =>  match find_zge o user_binop with
-                      |Some eq  => apply_binop Typ.TZ Typ.TZ Typ.Tbool eq
-                      |None => apply_binop Typ.TZ Typ.TZ Typ.Tbool  Zge_bool
-                      end
-          | BO_Zgt =>  match find_zgt o user_binop with
-                      |Some eq  => apply_binop Typ.TZ Typ.TZ Typ.Tbool eq
-                      |None => apply_binop Typ.TZ Typ.TZ Typ.Tbool  Zgt_bool
-                                           end
-          | BO_eq t => apply_binop t t Typ.Tbool (Typ.i_eqb t_i t (find_eqs user_binop))  
-       end.
+                    end.
     
 
       Fixpoint compute_interp ty acc l :=
@@ -1239,6 +1171,7 @@ Variable t_func : PArray.array tval.
         exists 1%positive; auto.
         exists 0%Z; auto.
         (* Unary operators *)
+
         destruct op; intros [i| | | ]; simpl; try discriminate; rewrite Typ.eqb_spec; intro H1; destruct (check_aux_interp_hatom h) as [x Hx]; rewrite Hx; simpl; generalize x Hx; rewrite H1; intros y Hy; rewrite Typ.cast_refl.
         exists (y~0)%positive; auto.
         exists (y~1)%positive; auto.
