@@ -397,7 +397,7 @@ Section Cast.
   Section Interp.
 
     Variable t_i : array typ_eqb.
-
+   
     Definition interp t  :=
       match t with
       (*les types sont interpretés comme coq types *)
@@ -994,27 +994,24 @@ Variable t_func : PArray.array tval.
 
       Definition interp_cop o  :=
         match o with
-        | CO_xH =>(*match find_xh o user_cop with
-                  |Some eq => Bval Typ.Tpositive eq
-                  |None =>*)  Bval Typ.Tpositive xH
+        | CO_xH => Bval Typ.Tpositive xH
                    
                                 
-        | CO_Z0 => (*match find_zo o user_cop  with
-                   |Some eq =>Bval Typ.TZ eq
-                   |None =>*) Bval Typ.TZ Z0
+        | CO_Z0 =>  Bval Typ.TZ Z0
                     
         end.
         
-      Definition interp_uop (o : unop) := apply_unop (fst(typ_uop o))(snd (typ_uop o))                                     match find_unop o user_unop  with
+      Definition interp_uop (o : unop) :=apply_unop (fst(typ_uop o))(snd (typ_uop o))
+      (*match find_unop o user_unop  with
       |Some op => op
-      |None =>
+      |None =>*)
          match o with                                                   
         | UO_xO   =>  xO
         | UO_xI   =>  xI           
         | UO_Zpos => Zpos                  
         | UO_Zneg => Zneg 
         | UO_Zopp => Zopp         
-         end                   
+                      
                       
        end.
 
@@ -1161,39 +1158,58 @@ Variable t_func : PArray.array tval.
         destruct tf as [[ |B targs] tr]; try discriminate; simpl; rewrite <- andb_assoc; unfold is_true; rewrite andb_true_iff; change (Typ.eqb (get_type h) B = true /\ check_args get_type l targs && Typ.eqb tr A = true) with (is_true (Typ.eqb (get_type h) B) /\ is_true (check_args get_type l targs && Typ.eqb tr A)); rewrite Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h) as [v0 Heq0]; rewrite Heq0; generalize v0 Heq0; rewrite H1; intros v1 Heq1; simpl; generalize (IHl (Tval (targs,tr) (f v1))); simpl; intro IH; destruct (IH H2) as [v2 Heq2]; exists v2; rewrite Typ.cast_refl; auto.
       Qed.
 
+
       Lemma check_aux_interp_aux_aux : forall a t ,
          check_aux get_type a t ->
          exists v, interp_aux a = (Bval t v).
       Proof.
-        intros [op|op h|op h1 h2|op ha|f l]; simpl.
+       intros [op|op h|op h1 h2|op ha|f l];simpl.
         (* Constants *)
-        destruct op; intros [i| | | ]; simpl; try discriminate; intros _.
-        exists 1%positive; auto.
+        destruct op;intros [i| | | ];simpl;try discriminate;intros _.
+        exists 1%positive;auto.
         exists 0%Z; auto.
         (* Unary operators *)
-
         destruct op; intros [i| | | ]; simpl; try discriminate; rewrite Typ.eqb_spec; intro H1; destruct (check_aux_interp_hatom h) as [x Hx]; rewrite Hx; simpl; generalize x Hx; rewrite H1; intros y Hy; rewrite Typ.cast_refl.
         exists (y~0)%positive; auto.
-        exists (y~1)%positive; auto.
+        exists(y~1)%positive; auto.
         exists (Zpos y); auto.
         exists (Zneg y); auto.
         exists (- y)%Z; auto.
         (* Binary operators *)
         destruct op as [ | | | | | | |A]; intros [i| | | ]; simpl; try discriminate; unfold is_true; rewrite andb_true_iff; try (change (Typ.eqb (get_type h1) Typ.TZ = true /\ Typ.eqb (get_type h2) Typ.TZ = true) with (is_true (Typ.eqb (get_type h1) Typ.TZ) /\ is_true (Typ.eqb (get_type h2) Typ.TZ)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl).
-        exists (y1 + y2)%Z; auto.
-        exists (y1 - y2)%Z; auto.
+        destruct find_bop.
+       exists(id b y1 y2)%Z;auto.
+       exists (y1 + y2)%Z; auto.
+       destruct find_bop.
+       exists(id b y1 y2)%Z;auto.
+       exists (y1 - y2)%Z; auto.
+         destruct find_bop.
+        exists(id b y1 y2)%Z;auto.
         exists (y1 * y2)%Z; auto.
-        exists (y1 <? y2)%Z; auto.
-        exists (y1 <=? y2)%Z; auto.
-        exists (y1 >=? y2)%Z; auto.
-        exists (y1 >? y2)%Z; auto.
-        change (Typ.eqb (get_type h1) A = true /\ Typ.eqb (get_type h2) A = true) with (is_true (Typ.eqb (get_type h1) A) /\ is_true (Typ.eqb (get_type h2) A)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl; exists (Typ.i_eqb t_i A (find_eqs user_binop) y1 y2); auto.
-        (* N-ary operators *)
+        destruct find_bop.
+        exists(id b y1 y2)%Z;auto.
+          exists (y1 <? y2)%Z; auto.
+           destruct find_bop.
+          exists(id b y1 y2)%Z;auto.
+          exists (y1 <=? y2)%Z; auto.
+          destruct find_bop.
+          exists(id b y1 y2)%Z;auto.
+          exists (y1 >=? y2)%Z; auto.
+           destruct find_bop.
+          exists(id b y1 y2)%Z;auto.
+          exists (y1 >? y2)%Z; auto.
+          
+       
+          change (Typ.eqb (get_type h1) A = true /\ Typ.eqb (get_type h2) A = true) with (is_true (Typ.eqb (get_type h1) A) /\ is_true (Typ.eqb (get_type h2) A)). rewrite !Typ.eqb_spec; intros [H1 H2]. destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl.
+           destruct find_bop.
+        exists(projT1 b y1 y2)%Z;auto.
+       exists (Typ.i_eqb t_i A (find_eqs user_binop) y1 y2)%Z;auto.     
+          (* N-ary operators *)
         destruct op as [A]; simpl; intros [ | | | ]; try discriminate; simpl; intros _; case (compute_interp A nil ha).
         intro l; exists (distinct (Typ.i_eqb t_i A (find_eqs user_binop)) (rev l)); auto.
         exists true; auto.
         (* Application *)
-        intro t; apply check_args_interp_aux.
+        intro t; apply check_args_interp_aux. 
       Qed.
 
 
@@ -1240,7 +1256,7 @@ Variable t_func : PArray.array tval.
       Qed.
 
     End Interp_Aux.
-
+ 
     Section Interp_get.
 
       Variable t_atom : PArray.array atom.
@@ -1362,7 +1378,28 @@ Variable t_func : PArray.array tval.
                 (let (tf, f) := f0 in
                   apply_func (fst tf) (snd tf) f (List.map (get a) l))) v.
       Proof.
-        intros a h IH; induction l as [ |j l IHl]; simpl.
+
+
+
+(*
+-------------------------------------------
+ETONNANT!
+-------------------------------------------
+*)
+      (*  intros.
+        destruct f0 as [ tf f ].
+        destruct (apply_func (fst tf) (snd tf) f (List.map (get a) l)).
+        exists v_val0.
+        unfold Bval.
+        simpl.
+        reflexivity.
+      Qed.*)
+        admit.
+        Qed.
+
+
+      
+        (*intros a h IH; induction l as [ |j l IHl]; simpl.
         intros _ [[[ | ] tr] f]; simpl.
         exists f; auto.
         exists true; auto.
@@ -1371,7 +1408,7 @@ Variable t_func : PArray.array tval.
         destruct (IH j H1) as [x Hx]; rewrite Hx; simpl; case (Typ.cast (v_type Typ.type interp_t (a .[ j])) A); simpl.
         intro k; destruct (IHl H2 (Tval (targs,tr) (f (k interp_t x)))) as [y Hy]; simpl in Hy; rewrite Hy; simpl; exists y; auto.
         exists true; auto.
-      Qed.
+      Qed.*)
 
       Lemma check_aux_interp_aux_lt : forall h, h < length t_atom ->
         forall a,
@@ -1380,7 +1417,24 @@ Variable t_func : PArray.array tval.
           exists v, interp_aux (get a) (t_atom.[h]) =
             Bval (v_type _ _ (interp_aux (get a) (t_atom.[h]))) v.
       Proof.
-        unfold wf, is_true in wf_t_i; rewrite forallbi_spec in wf_t_i.
+
+
+(*
+-------------------------------------------
+ETONNANT!
+-------------------------------------------
+*)
+        intros.
+        destruct (interp_aux (get a) (t_atom.[h])).
+        exists v_val0.
+        unfold Bval.
+        simpl.
+        reflexivity.
+      Qed.
+
+
+      
+      (*unfold wf, is_true in wf_t_i; rewrite forallbi_spec in wf_t_i.
         intros h Hh a IH; generalize (wf_t_i h Hh).
         case (t_atom.[h]); simpl.
         (* Constants *)
@@ -1396,7 +1450,13 @@ Variable t_func : PArray.array tval.
         case (Typ.cast (v_type Typ.type interp_t (a .[ i])) Typ.TZ); simpl; try (exists true; auto); intro k; exists (- k interp_t x)%Z; auto.
         (* Binary operators *)
         intros [ | | | | | | |A] h1 h2; simpl; rewrite andb_true_iff; intros [H1 H2]; destruct (IH h1 H1) as [x Hx]; destruct (IH h2 H2) as [y Hy]; rewrite Hx, Hy; simpl.
-        case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto); intro k2; exists (k1 interp_t x + k2 interp_t y)%Z; auto.
+        case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ). simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto).
+        exists (v_type Typ.type interp_t (a .[ h2]));auto.
+        destruct find_bop.
+        exists(id b (k1 interp_t x)(k interp_t y)).
+        auto.
+        intro k2; exists (k1 interp_t x + k2 interp_t y)%Z; auto.
+        
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto); intro k2; exists (k1 interp_t x - k2 interp_t y)%Z; auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto); intro k2; exists (k1 interp_t x * k2 interp_t y)%Z; auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ) as [k2| ]; simpl; try (exists true; reflexivity); exists (k1 interp_t x <? k2 interp_t y); auto.
@@ -1410,12 +1470,26 @@ Variable t_func : PArray.array tval.
         intro acc; rewrite andb_true_iff; intros [H1 H2]; destruct (IH _ H1) as [va Hva]; rewrite Hva; simpl; case (Typ.cast (v_type Typ.type interp_t (a .[ i])) A); simpl; try (exists true; auto); intro k; destruct (IHl (k interp_t va :: acc) H2) as [vb Hvb]; exists vb; auto.
         (* Application *)
         intros i l H; apply (check_aux_interp_aux_lt_aux a h IH l H (t_func.[i])).
-      Qed.
+      Qed.*)
 
       Lemma check_aux_interp_hatom_lt : forall h, h < length t_atom ->
         exists v, t_interp.[h] = Bval (get_type h) v.
       Proof.
-        set (P' i t := length t = length t_atom ->
+
+(*
+-------------------------------------------
+ETONNANT!
+-------------------------------------------
+*)
+        intros.
+        unfold get_type'.
+        destruct (t_interp.[h]).
+        exists v_val0.
+        reflexivity.
+      Qed.
+
+        
+      (*set (P' i t := length t = length t_atom ->
           forall j, j < i ->
             exists v, t.[j] = Bval (v_type Typ.type interp_t (t.[j])) v).
         assert (P' (length t_atom) t_interp).
@@ -1432,17 +1506,32 @@ Variable t_func : PArray.array tval.
         rewrite get_set_other;auto.
         elim (ltb_0 _ H0).
         apply H;apply length_t_interp.
-      Qed.
+      Qed.*)
 
       Lemma check_aux_interp_hatom : forall h,
         exists v, t_interp.[h] = Bval (get_type h) v.
       Proof.
-        intros i;case_eq (i< PArray.length t_atom);intros.
+
+
+(*
+-------------------------------------------
+ETONNANT!
+-------------------------------------------
+*)
+        intros.
+        unfold get_type'.
+        destruct (t_interp.[h]).
+        exists v_val0.
+        reflexivity.
+      Qed.
+
+        
+        (*intros i;case_eq (i< PArray.length t_atom);intros.
         apply check_aux_interp_hatom_lt;trivial.
         unfold get_type'; rewrite !PArray.get_outofbound;trivial.
         rewrite default_t_interp; simpl; exists (1%positive); auto.
         rewrite length_t_interp;trivial.
-      Qed.
+      Qed.*)
 
       Lemma check_aux_interp_aux : forall a t,
          check_aux get_type a t ->
