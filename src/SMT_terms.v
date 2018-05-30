@@ -13,7 +13,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-Add Rec LoadPath "/users/vals/bousalem/tools/github.com/aminsk/smtcoq/src" as SMTCoq.
 
 Require Import Bool List Int63 PArray.
 Require Import Misc State.
@@ -24,18 +23,13 @@ Local Open Scope int63_scope.
 Hint Unfold is_true.
 
 
-(* Remark: I use Notation instead of Definition to  eliminate conversion check during the type checking *)
+(* Remark: I use Notation instead of Definition du eliminate conversion check during the type checking *)
 Notation atom := int (only parsing).
-
-(***********************************************************
-                       module form
-****************************************************)
 
 Module Form.
 
   Notation fargs := (array _lit) (only parsing).
 
- 
   Inductive form : Type :=
   | Fatom (_:atom)
   | Ftrue
@@ -59,9 +53,6 @@ Module Form.
 
   Lemma is_Ffalse_correct : forall h, is_Ffalse h -> h = Ffalse.
   Proof. destruct h;trivial;discriminate. Qed.
-
-
-  (*********************************section d'interpretation************************)
 
   Section Interp.
     Variable interp_atom : atom -> bool.
@@ -233,8 +224,9 @@ Module Form.
     Qed.
 
   End Interp.
+
 End Form.
-(**********pour debuguer sur myeqbool*********)
+
 (* TODO Move this *)
 Record typ_eqb : Type := Typ_eqb {
   te_carrier : Type;
@@ -242,12 +234,10 @@ Record typ_eqb : Type := Typ_eqb {
   te_reflect : forall x y, reflect (x = y) (te_eqb x y)
 }.
 
-Definition typ_eqb_param A := { eq : A -> A -> bool & forall x y, reflect (x = y) (eq x y) }.
-
 Section Typ_eqb_param.
 
   Variable A : Type.
-  Variable r : typ_eqb_param A.
+  Variable r : { eq : A -> A -> bool & forall x y, reflect (x = y) (eq x y) }.
 
   Definition typ_eqb_of_typ_eqb_param : typ_eqb :=
     Typ_eqb A (projT1 r) (projT2 r).
@@ -278,74 +268,114 @@ Section Unit_typ_eqb.
 End Unit_typ_eqb.
 (* End TODO *)
 
-
-(********************************************************************************
-                               module Typ
-
- *********************************************************************************)
-
 Module Typ.
 
   Notation index := int (only parsing).
 
   Inductive type :=
-  | Tindex : index -> type 
+  | Tindex : index -> type
   | TZ : type
   | Tbool : type
   | Tpositive : type.
 
-  (* Remark : I use this definition because eqb will not be used only in the interpretation *)
-  Definition eqb (A B: type) : bool :=
-    match A, B with
-    | Tindex i, Tindex j => i == j
-    | TZ, TZ => true
-    | Tbool, Tbool => true
-    | Tpositive, Tpositive => true
-    | _, _ => false
-    end.
-
-  Lemma reflect_eqb : forall x y, reflect (x = y) (eqb x y).
-  Proof.
-      intros x y;destruct x;destruct y;simpl;try constructor;trivial;try discriminate.
-      apply iff_reflect;rewrite eqb_spec;split;intros H;[inversion H | subst];trivial.
-  Qed.
-  
-  Lemma eqb_spec : forall x y, eqb x y <-> x = y.
-  Proof.
-    intros;symmetry;apply reflect_iff;apply reflect_eqb.
-  Qed.
-  
-  Lemma eqb_refl : forall x, eqb x x.
-  Proof. intros; rewrite eqb_spec; auto. Qed.
-  
   Definition ftype := (list type * type)%type.
 
-    (* Plutôt que de tester l'égalité entre deux btypes dans Prop, on
+  Section Interp.
+
+    Variable t_i : PArray.array typ_eqb.
+    (*********interpreter Z autrement*************)
+    Class t(u_type:Type) :Type :=  Mk {utyp :u_type;
+                                       equ_t:u_type ->u_type -> Prop;
+                                       typ_cstr :option(u_type -> Prop)
+                    
+                                      }.
+    
+    Instance ZType : t Z :={|utyp :=Z0 ;equ_t :=(@eq Z) ;typ_cstr:= None |}.
+
+    Instance positiveType :t positive := {|utyp :=xH ;equ_t :=(@eq positive ) ;typ_cstr:= (Some(fun x => (Z0 < Zpos x )%Z))|}.
+    Instance NType :t N := {|utyp :=N0 ; equ_t :=(@eq N) ;typ_cstr :=(Some(fun x => BinNat.N0 <=x)%N) |}.
+    (*Instance natType :t nat :={|utyp := O ;equ_t :=(@eq nat) ;typ_cstr:= (Some (fun x =>(O%nat) <= x ))|}.*)
+    Instance boolType:t bool := {|utyp :=true ;equ_t :=@eq bool);typ_cstr :=(Some(fun x =>Bool.is_true x \/ ~Bool.Is_true x)).
+    
+
+                                                                                                  
+    
+    
+
+
+    
+
+    Definition interp t :=
+      match t with
+      | Tindex i => (t_i.[i]).(te_carrier)
+      | TZ =>  Z
+      | Tbool => bool
+      | Tpositive => positive
+      end.
+
+    Definition interp_ftype (t:ftype) :=
+      List.fold_right (fun dom codom =>interp dom -> codom)
+      (interp (snd t)) (fst t).
+
+    (* Boolean equality over interpretation of a btype *)
+    Section Interp_Equality.
+
+      
+      Definition i_eqb (t:type) : interp t -> interp t -> bool :=
+        match t with
+        | Tindex i => (t_i.[i]).(te_eqb)
+        | TZ => Zeq_bool
+        | Tbool => Bool.eqb
+        | Tpositive => Peqb
+        end.
+
+      Lemma i_eqb_spec : forall t x y, i_eqb t x y <-> x = y.
+      Proof.
+       destruct t;simpl;intros.
+       symmetry;apply reflect_iff;apply te_reflect.
+       symmetry;apply Zeq_is_eq_bool.
+       apply Bool.eqb_true_iff.
+       apply Peqb_eq.
+      Qed.
+
+      Lemma reflect_i_eqb : forall t x y, reflect (x = y) (i_eqb t x y).
+      Proof.
+        intros;apply iff_reflect;symmetry;apply i_eqb_spec.
+      Qed.
+
+      Lemma i_eqb_sym : forall t x y, i_eqb t x y = i_eqb t y x.
+      Proof.
+        intros t x y; case_eq (i_eqb t x y); case_eq (i_eqb t y x); auto.
+        change (i_eqb t x y = true) with (is_true (i_eqb t x y)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t x x); inversion H; [rewrite <- H0 in H1; discriminate|elim H2; auto].
+        change (i_eqb t y x = true) with (is_true (i_eqb t y x)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t x x); inversion H; [rewrite <- H0 in H2; discriminate|elim H1; auto].
+      Qed.
+
+    End Interp_Equality.
+
+  End Interp.
+
+  (* Plutôt que de tester l'égalité entre deux btypes dans Prop, on
      écrit une fonction calculant:
      - si deux btype A et B sont égaux
      - si oui, une fonction permettant de passer les objets de type A en
      objets de type B
      On montre que cette fonction réfléchit l'égalité de Coq. *)
 
-Section Cast.
-  (****type coersion :to infer the type of an application ,we observ a boolean equality between the domain of the function and the type of its arguments is sufficient*)
+  Section Cast.
 
   (* L'inductif cast_result spécifie si deux btype sont égaux (Cast) ou
      non (NoCast). Dans le cas où ils sont égaux, une fonction permet de
      passer de l'un à l'autre. *)
 
     Inductive cast_result (A B: type) : Type :=
-      (*map an object of some type P A to P B*)
     | Cast (k: forall P, P A -> P B)
     | NoCast.
 
     Implicit Arguments Cast [A B].
     Implicit Arguments NoCast [A B].
 
-    (*c'est pour les types égaux donc ça sera la meme chose (identité) *)
     Notation idcast := (Cast (fun P x => x)).
-    (* La fonction cast calcule cast_result *)    (*return Nocast if its arguments are different *)
-    
+    (* La fonction cast calcule cast_result *)
 
     Definition cast (A B: type) : cast_result A B :=
       match A as C, B as D return cast_result C D with
@@ -366,6 +396,17 @@ Section Cast.
       intros A0;destruct A0;simpl;trivial.
       rewrite cast_refl;trivial.
     Qed.
+
+    (* Remark : I use this definition because eqb will not be used only in the interpretation *)
+    Definition eqb (A B: type) : bool :=
+      match A, B with
+      | Tindex i, Tindex j => i == j
+      | TZ, TZ => true
+      | Tbool, Tbool => true
+      | Tpositive, Tpositive => true
+      | _, _ => false
+      end.
+
 
     (* TODO : Move this *)
     Lemma not_false : ~ false.
@@ -391,121 +432,21 @@ Section Cast.
       intros C D;case_eq (eqb C D);trivial;apply cast_diff.
     Qed.
 
-  End Cast.
-
-  
-  Section Interp.
-
-    Variable t_i : array typ_eqb.
-   
-    Definition interp t  :=
-      match t with
-      (*les types sont interpretés comme coq types *)
-      (*the deep terms are those of the theories handled by the checker :congruence closure and linera integer arithmetic*)
-      (*there are possibly different uninterpreted types:this allow to deal with coq terms containing many different types not handled by the smt solver like user defined or higher order types*)
-      | Tindex i => (t_i.[i]).(te_carrier)(*type uninterpreter indexed by machine integers*)
-      | TZ => Z
-      | Tbool => bool
-      | Tpositive => positive
-      end.
-
-    Definition interp_ftype (t:ftype)  :=
-      List.fold_right (fun dom codom =>interp dom   -> codom)
-                      (interp (snd t) ) (fst t).
-                      (* Boolean equality over interpretation of a btype *)
-                      
-    Section Interp_Equality.
-
-      (********************interpretation des Zeq de l'utilisateur ******************)
- (*Fixpoint myeqbool_aux (x y :positive) := match (x, y) with (xH, xH) => true | (xI x, xI y) => myeqbool_aux x y | (xO x, xO y) => myeqbool_aux x y | (_, _) => false end.
-Definition myeqbool (x y : Z) := match (x, y) with (Z0, Z0) => true | (Zpos x, Zpos y) => myeqbool_aux x y | (Zneg x, Zneg y) => myeqbool_aux x y | (_, _) => false end.
-
-Lemma myeqbool_aux_refl : forall x, myeqbool_aux x x.
-Proof.
-  induction x.
-  apply IHx.
-  apply IHx.
-  reflexivity.
-Qed.
-
-Lemma myeqbool_refl : forall x, myeqbool x x.
-Proof.
-  intro x.
-  destruct x.
-  reflexivity.
-  unfold myeqbool.
-  apply myeqbool_aux_refl.
-  unfold myeqbool.
-  apply myeqbool_aux_refl.
-Qed.       
-  *)
-      (*rajouter une liste de binop definit en bas et tester si on trouve dedans sinon en garde autre fonction*)
-
-      Fixpoint find_eq (t:type) (l:list {u : type & typ_eqb_param (interp u)}) : option (typ_eqb_param (interp t)) :=
-        match l with
-        | nil => None
-        | (existT u eq_param)::l' =>
-          match cast u t with
-          | Cast k => Some (k _ eq_param)
-          | NoCast => find_eq t l'
-          end
-        end.
-      
-
-      Definition i_eqb (t:type) (user_eqb_list:list {u : type & typ_eqb_param (interp u)}) : interp t -> interp t -> bool :=
-       
-        match find_eq t user_eqb_list with
-          | Some (existT eq _) => eq
-          | None =>
-            match t with
-            |Tindex i => (t_i.[i]).(te_eqb)  
-            | TZ => Zeq_bool
-            | Tbool => Bool.eqb
-            | Tpositive => Peqb
-            end 
-        end.
-(************************************************************************)
-
-    Lemma i_eqb_spec : forall t user_eqb_list x y, i_eqb t user_eqb_list x y  <-> x = y.
+    Lemma reflect_eqb : forall x y, reflect (x = y) (eqb x y).
     Proof.
-      intros t user_eqb_list x y.
-      unfold i_eqb.
-      destruct (find_eq t user_eqb_list).
-      destruct t0.
-      symmetry.
-      apply reflect_iff.
-      apply r.
-        destruct t.
-      intros.
-      symmetry;
-      apply reflect_iff;
-      apply te_reflect.
-      symmetry;apply Zeq_is_eq_bool.
-      apply Bool.eqb_true_iff.
-      apply Peqb_eq.
+      intros x y;destruct x;destruct y;simpl;try constructor;trivial;try discriminate.
+      apply iff_reflect;rewrite eqb_spec;split;intros H;[inversion H | subst];trivial.
     Qed.
 
-    Lemma reflect_i_eqb : forall t user_eqb_list x y ,reflect (x = y) (i_eqb t user_eqb_list x y).
-      Proof.
-        intros.
-        apply iff_reflect.
-        symmetry;apply i_eqb_spec.
-      Qed.
+    Lemma eqb_spec : forall x y, eqb x y <-> x = y.
+    Proof.
+      intros;symmetry;apply reflect_iff;apply reflect_eqb.
+    Qed.
 
-      Lemma i_eqb_sym : forall t user_eqb_list x y, i_eqb  t user_eqb_list x y = i_eqb t  user_eqb_list y x.
-      Proof.
-     
-        intros t user_eqb_list x y; case_eq (i_eqb t user_eqb_list x y); case_eq (i_eqb t user_eqb_list  y x); auto.
-        change (i_eqb t user_eqb_list x y = true) with (is_true (i_eqb t user_eqb_list  x y)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t user_eqb_list x x); inversion H; [rewrite <- H0 in H1; discriminate|elim H2; auto].
-        change (i_eqb t user_eqb_list y x = true) with (is_true (i_eqb t user_eqb_list  y x)); rewrite i_eqb_spec; intros H1 H2; subst y; pose (H:=reflect_i_eqb t user_eqb_list  x x); inversion H; [rewrite <- H0 in H2; discriminate|elim H1; auto].
-Qed.
+    Lemma eqb_refl : forall x, eqb x x.
+    Proof. intros; rewrite eqb_spec; auto. Qed.
 
-        
-
-    End Interp_Equality.
-
-  End Interp.
- 
+  End Cast.
 
 End Typ.
 
@@ -552,25 +493,15 @@ Proof.
 Qed.
 (* End move *)
 
-
-
-
-
-
-
-
-        (*******************************************
-                    module atom
-       ******** ************************************)
-
 Module Atom.
-  
+
   Notation func := int (only parsing).
-  
+ 
   Inductive cop : Type := 
    | CO_xH
    | CO_Z0.
- 
+
+  
   Inductive unop : Type :=
    | UO_xO
    | UO_xI
@@ -586,12 +517,13 @@ Module Atom.
    | BO_Zle
    | BO_Zge
    | BO_Zgt
-   | BO_eq (_ : Typ.type) .
+   | BO_eq (_ : Typ.type).
 
   Inductive nop : Type :=
    | NO_distinct (_ : Typ.type).
 
   Notation hatom := int (only parsing).
+ 
   Inductive atom : Type :=
    | Acop (_: cop)
    | Auop (_ : unop) (_:hatom)
@@ -603,16 +535,13 @@ Module Atom.
   (* Generic predicates and operations *)
 
   (** Equality *)
- 
-
-  Definition cop_eqb o o'   :=
-   match o , o'  with
+  Definition cop_eqb o o' :=
+   match o, o' with
    | CO_xH, CO_xH 
    | CO_Z0, CO_Z0 => true
-   | _ , _ =>false
-    end.
-  
-                                                                                   
+   | _,_ => false
+   end.
+
   Definition uop_eqb o o' :=
    match o, o' with
    | UO_xO, UO_xO 
@@ -632,8 +561,7 @@ Module Atom.
    | BO_Zle, BO_Zle
    | BO_Zge, BO_Zge
    | BO_Zgt, BO_Zgt => true
-   | BO_eq t, BO_eq t'=> Typ.eqb t t'
-
+   | BO_eq t, BO_eq t' => Typ.eqb t t'
    | _,_ => false
    end.
 
@@ -693,7 +621,6 @@ Module Atom.
     preflect (Int63Properties.reflect_eqb i i1);
     preflect (Int63Properties.reflect_eqb i0 i2);
     constructor;subst;trivial.
-
     (* N-ary operators *)
     preflect (reflect_nop_eqb n n0); preflect (reflect_list_beq _ _ Int63Properties.reflect_eqb l l0); constructor; subst; reflexivity.
     (* Application *)
@@ -709,19 +636,17 @@ Module Atom.
   
   (** Typing and interpretation *)
   
-  Record val (t:Type) (I: t  -> Type)  := Val {
-    v_type : t;                                                     
-    v_val : I v_type 
+  Record val (t:Type) (I:t -> Type) := Val {
+    v_type : t;
+    v_val : I v_type
   }.
 
-
-  (****typing interpretation :in coq types **)
   Section Typing_Interp.
     Variable t_i : PArray.array typ_eqb.
- 
 
     Local Notation interp_t := (Typ.interp t_i).
     Local Notation interp_ft := (Typ.interp_ftype t_i).
+
     Definition bval := val Typ.type interp_t.
     Definition Bval := Val Typ.type interp_t.
     Definition tval := val Typ.ftype interp_ft.
@@ -745,22 +670,17 @@ Module Atom.
     Qed.
 
     (* Interprétation d'une fonction*)
-    
-Variable t_func : PArray.array tval.
+    Variable t_func : PArray.array tval.
+
     (** Type checking of atom assuming an type for hatom *)
     Section Typ_Aux.
       Variable get_type : hatom -> Typ.type.
-      
-      (******user defenition of constant CO_xH*****)
-     
-                                                                 
+
       Definition typ_cop o := 
         match o with
         | CO_xH => Typ.Tpositive 
         | CO_Z0 => Typ.TZ
-      
-          end.
-  
+        end.
 
       Definition typ_uop o :=
         match o with
@@ -781,16 +701,13 @@ Variable t_func : PArray.array tval.
         | BO_Zge    => ((Typ.TZ,Typ.TZ), Typ.Tbool) 
         | BO_Zgt    => ((Typ.TZ,Typ.TZ), Typ.Tbool)
         | BO_eq t   => ((t,t),Typ.Tbool)
-       
         end.
 
       Definition typ_nop o :=
         match o with
           | NO_distinct t => (t,Typ.Tbool)
         end.
- (************pour les operateurs binaires************************)
-      
-      (*************************pour égalité booleenne*******************************************)
+
       Fixpoint check_args (args:list hatom) (targs:list Typ.type) :=
         match args, targs with
         | nil, nil => true
@@ -881,78 +798,12 @@ Variable t_func : PArray.array tval.
         (* Application *)
         case (v_type Typ.ftype interp_ft (t_func .[ f])); intros; apply check_args_dec.
       Qed.
-      
-     
+
     End Typ_Aux.
-  
-    (*******************************pour les operation uniaires définis par utilisateur**********)
-      Import EqNotations.
-    Definition unop_param(o:unop) :=interp_t(fst(typ_uop o)) -> interp_t(snd(typ_uop o)).
-    Variable user_unop :list {o:unop &  unop_param o}.
-           
-   Fixpoint find_unop (o:unop) (l:list{op:unop & unop_param op}) : option (unop_param o) := 
-            match l with
-             |nil => None
-             |(existT o' op_param)::l' =>
-               match reflect_uop_eqb o' o with
-                     |ReflectT Heq => Some (rew Heq in op_param)
-                     |ReflectF _  => find_unop o l'
-               end
-
-            end.
-               
-
-       
-              
- 
-    
-    
-   (************** interpretation pour les operateurs binaires **********)
-    (********pour égalité boolenne*****************************)
-    
-     Definition binop_param (o : binop) :=
-      match o with
-      | BO_eq t => typ_eqb_param (interp_t t)
-      | _ => interp_t (fst (fst (typ_bop o)))
-             -> interp_t (snd (fst (typ_bop o)))
-             -> interp_t (snd (typ_bop o))
-      end.
-   
-    Variable user_binop : list {o : binop & binop_param o}.
-    Fixpoint find_eqs (l : list {o : binop & binop_param o})
-      : list {u : Typ.type & typ_eqb_param (interp_t u)} :=
-      match l with
-      | nil => nil
-      | (existT (BO_eq t) param)::l' => (existT _ t param)::(find_eqs l')
-      | _::l' => find_eqs l'
-      end.
-
-    
     (** Interpretation of hatom assuming an interpretation for atom *)
-    (* Interprétation d'une fonction*)
-    (*****************autres operateurs binaires************************)
-  
-    Fixpoint find_bop (o :binop) (l:list {op:binop  & binop_param op}) : option (binop_param o) :=
-      match l with
-      | nil => None
-      | (existT o' op_param)::l' =>
-        match reflect_bop_eqb o' o with
-        | ReflectT Heq => Some (rew Heq in op_param)
-        | ReflectF _ => find_bop o l'
-        end
-      end.
-    
-    (****************************************************************************)
-    
-  
-    
-             
     Section Interp_Aux.
-     
+
       Variable interp_hatom : hatom -> bval.
-   
-  
- (*definition d'une liste qui contient tous les operateurs binaires definit par utilisateur***)
 
       Definition apply_unop (t  r : Typ.type)
             (op : interp_t t -> interp_t r) (tv:bval) :=
@@ -992,63 +843,32 @@ Variable t_func : PArray.array tval.
           end
         end f.
 
-      Definition interp_cop o  :=
+      Definition interp_cop o :=
         match o with
         | CO_xH => Bval Typ.Tpositive xH
-                   
-                                
-        | CO_Z0 =>  Bval Typ.TZ Z0
-                    
-        end.
-        
-      Definition interp_uop (o : unop) :=apply_unop (fst(typ_uop o))(snd (typ_uop o))
-      (*match find_unop o user_unop  with
-      |Some op => op
-      |None =>*)
-         match o with                                                   
-        | UO_xO   =>  xO
-        | UO_xI   =>  xI           
-        | UO_Zpos => Zpos                  
-        | UO_Zneg => Zneg 
-        | UO_Zopp => Zopp         
-                      
-                      
-       end.
-
-      Definition param_to_interp (o : binop) :
-        binop_param o
-        -> interp_t (fst (fst (typ_bop o)))
-        -> interp_t (snd (fst (typ_bop o)))
-        -> interp_t (snd (typ_bop o))
-        :=
-          match o with
-          | BO_Zplus => id
-          | BO_Zminus => id
-          | BO_Zmult => id
-          | BO_Zlt => id
-          | BO_Zle => id
-          | BO_Zge => id
-          | BO_Zgt => id
-          | BO_eq t => (fun param => projT1 param)
+        | CO_Z0 => Bval Typ.TZ Z0
         end.
 
-      Definition interp_bop (o :binop) :=
-        apply_binop (fst (fst (typ_bop o))) (snd (fst (typ_bop o))) (snd (typ_bop o))
-                    match find_bop o user_binop with
-                    | Some op => param_to_interp o op
-                    | None =>
-                      match o with
-                      | BO_Zplus => Zplus
-                      | BO_Zminus => Zminus
-                      | BO_Zmult => Zmult
-                      | BO_Zlt => Zlt_bool
-                      | BO_Zle => Zle_bool
-                      | BO_Zge => Zge_bool
-                      | BO_Zgt => Zgt_bool
-                      | BO_eq t => Typ.i_eqb t_i t (find_eqs user_binop)
-                      end
-                    end.
-    
+      Definition interp_uop o :=    
+        match o with
+        | UO_xO   => apply_unop Typ.Tpositive Typ.Tpositive xO
+        | UO_xI   => apply_unop Typ.Tpositive Typ.Tpositive xI
+        | UO_Zpos => apply_unop Typ.Tpositive Typ.TZ Zpos
+        | UO_Zneg => apply_unop Typ.Tpositive Typ.TZ Zneg
+        | UO_Zopp => apply_unop Typ.TZ Typ.TZ Zopp
+        end.
+
+      Definition interp_bop o :=
+         match o with
+         | BO_Zplus => apply_binop Typ.TZ Typ.TZ Typ.TZ Zplus
+         | BO_Zminus => apply_binop Typ.TZ Typ.TZ Typ.TZ Zminus
+         | BO_Zmult => apply_binop Typ.TZ Typ.TZ Typ.TZ Zmult
+         | BO_Zlt => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zlt_bool
+         | BO_Zle => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zle_bool
+         | BO_Zge => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zge_bool
+         | BO_Zgt => apply_binop Typ.TZ Typ.TZ Typ.Tbool Zgt_bool
+         | BO_eq t => apply_binop t t Typ.Tbool (Typ.i_eqb t_i t)
+         end.
 
       Fixpoint compute_interp ty acc l :=
         match l with
@@ -1061,7 +881,29 @@ Variable t_func : PArray.array tval.
             end
         end.
 
- 
+      (* Lemma compute_interp_spec : forall ty l acc, *)
+      (*   match compute_interp ty acc l with *)
+      (*     | Some l' => forall i, In i l' <-> (In i acc \/ (exists a, In a l /\ interp_hatom a = Bval ty i)) *)
+      (*     | None => exists a, In a l /\ let (ta,_) := interp_hatom a in ta <> ty *)
+      (*   end. *)
+      (* Proof. *)
+      (*   intro ty; induction l as [ |a q IHq]; simpl. *)
+      (*   intros acc i; split. *)
+      (*   intro H; left; auto. *)
+      (*   intros [H|[a [H _]]]; auto; elim H. *)
+      (*   intro acc; case_eq (interp_hatom a); intros ta va Heq; rewrite Typ.neq_cast; case_eq (Typ.eqb ta ty). *)
+      (*   change (Typ.eqb ta ty = true) with (is_true (Typ.eqb ta ty)); rewrite Typ.eqb_spec; intro; subst ta; rewrite Typ.cast_refl; generalize (IHq (va :: acc)); clear IHq; case (compute_interp ty (va :: acc) q). *)
+      (*   intros l IH i; rewrite (IH i); clear IH; split; intros [H|[a1 [H1 H2]]]. *)
+      (*   inversion H; auto. *)
+      (*   subst va; clear H; right; exists a; split; auto. *)
+      (*   right; exists a1; split; auto. *)
+      (*   left; constructor 2; auto. *)
+      (*   destruct H1 as [H1|H1]. *)
+      (*   subst a1; left; constructor 1; rewrite Heq in H2; apply (Bval_inj2 ty); auto. *)
+      (*   right; exists a1; auto. *)
+      (*   intros [a1 [H1 H2]]; exists a1; split; auto. *)
+      (*   intro H; exists a; split; auto; rewrite Heq; intro H1; subst ta; rewrite Typ.eqb_refl in H; discriminate. *)
+      (* Qed. *)
 
       Lemma compute_interp_spec : forall ty l acc,
         match compute_interp ty acc l with
@@ -1101,7 +943,14 @@ Variable t_func : PArray.array tval.
         intro H; exists a; split; auto; rewrite Heq; intro H1; subst ta; rewrite Typ.eqb_refl in H; discriminate.
       Qed.
 
-
+      (* Lemma compute_interp_spec_rev : forall ty l, *)
+      (*   match compute_interp ty nil l with *)
+      (*     | Some l' => forall i, In i (rev l') <-> (exists a, In a l /\ interp_hatom a = Bval ty i) *)
+      (*     | None => exists a, In a l /\ let (ta,_) := interp_hatom a in ta <> ty *)
+      (*   end. *)
+      (* Proof. (* ICI *) *)
+      (*   intros ty l; generalize (compute_interp_spec ty l nil); case (compute_interp ty nil l); auto; intros l' H i; rewrite <- In_rev, (H i); split; auto; intros [H1|H1]; auto; inversion H1. *)
+      (* Qed. *)
 
       Lemma compute_interp_spec_rev : forall ty l,
         match compute_interp ty nil l with
@@ -1112,14 +961,14 @@ Variable t_func : PArray.array tval.
         intros ty l; generalize (compute_interp_spec ty l nil); case (compute_interp ty nil l); auto; intros l' H i j; rewrite In2_rev, (H i j); split; auto; intros [H1|[[H1 _]|H1]]; auto; inversion H1.
       Qed.
 
-      Definition interp_aux (a:atom): bval :=
+      Definition interp_aux (a:atom) : bval :=
         match a with
         | Acop o => interp_cop o
         | Auop o a => interp_uop o (interp_hatom a)
         | Abop o a1 a2 => interp_bop o (interp_hatom a1) (interp_hatom a2)
         | Anop (NO_distinct t) a =>
           match compute_interp t nil a with
-            | Some l => Bval Typ.Tbool (distinct (Typ.i_eqb t_i t (find_eqs user_binop)) (rev l))
+            | Some l => Bval Typ.Tbool (distinct (Typ.i_eqb t_i t) (rev l))
             | None => bvtrue
           end
         | Aapp f args =>
@@ -1134,7 +983,6 @@ Variable t_func : PArray.array tval.
         | Typ.Cast k => k _ v
         | _ => true
         end.
-    
 
 
       (* If an atom is well-typed, it has an interpretation *)
@@ -1158,58 +1006,38 @@ Variable t_func : PArray.array tval.
         destruct tf as [[ |B targs] tr]; try discriminate; simpl; rewrite <- andb_assoc; unfold is_true; rewrite andb_true_iff; change (Typ.eqb (get_type h) B = true /\ check_args get_type l targs && Typ.eqb tr A = true) with (is_true (Typ.eqb (get_type h) B) /\ is_true (check_args get_type l targs && Typ.eqb tr A)); rewrite Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h) as [v0 Heq0]; rewrite Heq0; generalize v0 Heq0; rewrite H1; intros v1 Heq1; simpl; generalize (IHl (Tval (targs,tr) (f v1))); simpl; intro IH; destruct (IH H2) as [v2 Heq2]; exists v2; rewrite Typ.cast_refl; auto.
       Qed.
 
-
-      Lemma check_aux_interp_aux_aux : forall a t ,
+      Lemma check_aux_interp_aux_aux : forall a t,
          check_aux get_type a t ->
          exists v, interp_aux a = (Bval t v).
       Proof.
-       intros [op|op h|op h1 h2|op ha|f l];simpl.
+        intros [op|op h|op h1 h2|op ha|f l]; simpl.
         (* Constants *)
-        destruct op;intros [i| | | ];simpl;try discriminate;intros _.
-        exists 1%positive;auto.
+        destruct op; intros [i| | | ]; simpl; try discriminate; intros _.
+        exists 1%positive; auto.
         exists 0%Z; auto.
         (* Unary operators *)
         destruct op; intros [i| | | ]; simpl; try discriminate; rewrite Typ.eqb_spec; intro H1; destruct (check_aux_interp_hatom h) as [x Hx]; rewrite Hx; simpl; generalize x Hx; rewrite H1; intros y Hy; rewrite Typ.cast_refl.
         exists (y~0)%positive; auto.
-        exists(y~1)%positive; auto.
+        exists (y~1)%positive; auto.
         exists (Zpos y); auto.
         exists (Zneg y); auto.
         exists (- y)%Z; auto.
         (* Binary operators *)
         destruct op as [ | | | | | | |A]; intros [i| | | ]; simpl; try discriminate; unfold is_true; rewrite andb_true_iff; try (change (Typ.eqb (get_type h1) Typ.TZ = true /\ Typ.eqb (get_type h2) Typ.TZ = true) with (is_true (Typ.eqb (get_type h1) Typ.TZ) /\ is_true (Typ.eqb (get_type h2) Typ.TZ)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl).
-        destruct find_bop.
-       exists(id b y1 y2)%Z;auto.
-       exists (y1 + y2)%Z; auto.
-       destruct find_bop.
-       exists(id b y1 y2)%Z;auto.
-       exists (y1 - y2)%Z; auto.
-         destruct find_bop.
-        exists(id b y1 y2)%Z;auto.
+        exists (y1 + y2)%Z; auto.
+        exists (y1 - y2)%Z; auto.
         exists (y1 * y2)%Z; auto.
-        destruct find_bop.
-        exists(id b y1 y2)%Z;auto.
-          exists (y1 <? y2)%Z; auto.
-           destruct find_bop.
-          exists(id b y1 y2)%Z;auto.
-          exists (y1 <=? y2)%Z; auto.
-          destruct find_bop.
-          exists(id b y1 y2)%Z;auto.
-          exists (y1 >=? y2)%Z; auto.
-           destruct find_bop.
-          exists(id b y1 y2)%Z;auto.
-          exists (y1 >? y2)%Z; auto.
-          
-       
-          change (Typ.eqb (get_type h1) A = true /\ Typ.eqb (get_type h2) A = true) with (is_true (Typ.eqb (get_type h1) A) /\ is_true (Typ.eqb (get_type h2) A)). rewrite !Typ.eqb_spec; intros [H1 H2]. destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl.
-           destruct find_bop.
-        exists(projT1 b y1 y2)%Z;auto.
-       exists (Typ.i_eqb t_i A (find_eqs user_binop) y1 y2)%Z;auto.     
-          (* N-ary operators *)
+        exists (y1 <? y2)%Z; auto.
+        exists (y1 <=? y2)%Z; auto.
+        exists (y1 >=? y2)%Z; auto.
+        exists (y1 >? y2)%Z; auto.
+        change (Typ.eqb (get_type h1) A = true /\ Typ.eqb (get_type h2) A = true) with (is_true (Typ.eqb (get_type h1) A) /\ is_true (Typ.eqb (get_type h2) A)); rewrite !Typ.eqb_spec; intros [H1 H2]; destruct (check_aux_interp_hatom h1) as [x1 Hx1]; rewrite Hx1; destruct (check_aux_interp_hatom h2) as [x2 Hx2]; rewrite Hx2; simpl; generalize x1 Hx1 x2 Hx2; rewrite H1, H2; intros y1 Hy1 y2 Hy2; rewrite !Typ.cast_refl; exists (Typ.i_eqb t_i A y1 y2); auto.
+        (* N-ary operators *)
         destruct op as [A]; simpl; intros [ | | | ]; try discriminate; simpl; intros _; case (compute_interp A nil ha).
-        intro l; exists (distinct (Typ.i_eqb t_i A (find_eqs user_binop)) (rev l)); auto.
+        intro l; exists (distinct (Typ.i_eqb t_i A) (rev l)); auto.
         exists true; auto.
         (* Application *)
-        intro t; apply check_args_interp_aux. 
+        intro t; apply check_args_interp_aux.
       Qed.
 
 
@@ -1244,7 +1072,7 @@ Variable t_func : PArray.array tval.
         (* Binary operators *)
         destruct op; simpl; intro H; destruct (check_aux_interp_hatom h1) as [v1 Hv1]; destruct (check_aux_interp_hatom h2) as [v2 Hv2]; rewrite Hv1, Hv2; simpl; try (pose (H2 := H Typ.TZ); simpl in H2; rewrite andb_false_iff in H2; destruct H2 as [H2|H2]; [rewrite (Typ.neq_cast (get_type h1)), H2|rewrite (Typ.neq_cast (get_type h2)), H2; case (Typ.cast (get_type h1) Typ.TZ)]; auto); try (pose (H2 := H Typ.Tbool); simpl in H2; rewrite andb_false_iff in H2; destruct H2 as [H2|H2]; [rewrite (Typ.neq_cast (get_type h1)), H2|rewrite (Typ.neq_cast (get_type h2)), H2; case (Typ.cast (get_type h1) Typ.TZ)]; auto); case (Typ.cast (get_type h1) t); auto.
         (* N-ary operators *)
-        destruct op as [A]; simpl; intro H; generalize (H Typ.Tbool); simpl; clear H; assert (H: forall l1, List.forallb (fun t1 : int => Typ.eqb (get_type t1) A) ha = false -> match compute_interp A l1 ha with | Some l => Bval Typ.Tbool (distinct (Typ.i_eqb t_i  A (find_eqs user_binop)) (rev l)) | None => bvtrue end = bvtrue).
+        destruct op as [A]; simpl; intro H; generalize (H Typ.Tbool); simpl; clear H; assert (H: forall l1, List.forallb (fun t1 : int => Typ.eqb (get_type t1) A) ha = false -> match compute_interp A l1 ha with | Some l => Bval Typ.Tbool (distinct (Typ.i_eqb t_i A) (rev l)) | None => bvtrue end = bvtrue).
         induction ha as [ |h ha Iha]; simpl.
         intros; discriminate.
         intro l1; destruct (check_aux_interp_hatom h) as [vh Hh]; case_eq (Typ.eqb (get_type h) A); simpl.
@@ -1256,7 +1084,7 @@ Variable t_func : PArray.array tval.
       Qed.
 
     End Interp_Aux.
- 
+
     Section Interp_get.
 
       Variable t_atom : PArray.array atom.
@@ -1378,28 +1206,7 @@ Variable t_func : PArray.array tval.
                 (let (tf, f) := f0 in
                   apply_func (fst tf) (snd tf) f (List.map (get a) l))) v.
       Proof.
-
-
-
-(*
--------------------------------------------
-ETONNANT!
--------------------------------------------
-*)
-      (*  intros.
-        destruct f0 as [ tf f ].
-        destruct (apply_func (fst tf) (snd tf) f (List.map (get a) l)).
-        exists v_val0.
-        unfold Bval.
-        simpl.
-        reflexivity.
-      Qed.*)
-        admit.
-        Qed.
-
-
-      
-        (*intros a h IH; induction l as [ |j l IHl]; simpl.
+        intros a h IH; induction l as [ |j l IHl]; simpl.
         intros _ [[[ | ] tr] f]; simpl.
         exists f; auto.
         exists true; auto.
@@ -1408,7 +1215,7 @@ ETONNANT!
         destruct (IH j H1) as [x Hx]; rewrite Hx; simpl; case (Typ.cast (v_type Typ.type interp_t (a .[ j])) A); simpl.
         intro k; destruct (IHl H2 (Tval (targs,tr) (f (k interp_t x)))) as [y Hy]; simpl in Hy; rewrite Hy; simpl; exists y; auto.
         exists true; auto.
-      Qed.*)
+      Qed.
 
       Lemma check_aux_interp_aux_lt : forall h, h < length t_atom ->
         forall a,
@@ -1417,24 +1224,7 @@ ETONNANT!
           exists v, interp_aux (get a) (t_atom.[h]) =
             Bval (v_type _ _ (interp_aux (get a) (t_atom.[h]))) v.
       Proof.
-
-
-(*
--------------------------------------------
-ETONNANT!
--------------------------------------------
-*)
-        intros.
-        destruct (interp_aux (get a) (t_atom.[h])).
-        exists v_val0.
-        unfold Bval.
-        simpl.
-        reflexivity.
-      Qed.
-
-
-      
-      (*unfold wf, is_true in wf_t_i; rewrite forallbi_spec in wf_t_i.
+        unfold wf, is_true in wf_t_i; rewrite forallbi_spec in wf_t_i.
         intros h Hh a IH; generalize (wf_t_i h Hh).
         case (t_atom.[h]); simpl.
         (* Constants *)
@@ -1450,46 +1240,26 @@ ETONNANT!
         case (Typ.cast (v_type Typ.type interp_t (a .[ i])) Typ.TZ); simpl; try (exists true; auto); intro k; exists (- k interp_t x)%Z; auto.
         (* Binary operators *)
         intros [ | | | | | | |A] h1 h2; simpl; rewrite andb_true_iff; intros [H1 H2]; destruct (IH h1 H1) as [x Hx]; destruct (IH h2 H2) as [y Hy]; rewrite Hx, Hy; simpl.
-        case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ). simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto).
-        exists (v_type Typ.type interp_t (a .[ h2]));auto.
-        destruct find_bop.
-        exists(id b (k1 interp_t x)(k interp_t y)).
-        auto.
-        intro k2; exists (k1 interp_t x + k2 interp_t y)%Z; auto.
-        
+        case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto); intro k2; exists (k1 interp_t x + k2 interp_t y)%Z; auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto); intro k2; exists (k1 interp_t x - k2 interp_t y)%Z; auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ); simpl; try (exists true; auto); intro k2; exists (k1 interp_t x * k2 interp_t y)%Z; auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ) as [k2| ]; simpl; try (exists true; reflexivity); exists (k1 interp_t x <? k2 interp_t y); auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ) as [k2| ]; simpl; try (exists true; reflexivity); exists (k1 interp_t x <=? k2 interp_t y); auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ) as [k2| ]; simpl; try (exists true; reflexivity); exists (k1 interp_t x >=? k2 interp_t y); auto.
         case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) Typ.TZ); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) Typ.TZ) as [k2| ]; simpl; try (exists true; reflexivity); exists (k1 interp_t x >? k2 interp_t y); auto.
-        case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) A); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) A) as [k2| ]; simpl; try (exists true; reflexivity); exists (Typ.i_eqb t_i A (find_eqs user_binop) (k1 interp_t x) (k2 interp_t y)); auto.
+        case (Typ.cast (v_type Typ.type interp_t (a .[ h1])) A); simpl; try (exists true; auto); intro k1; case (Typ.cast (v_type Typ.type interp_t (a .[ h2])) A) as [k2| ]; simpl; try (exists true; reflexivity); exists (Typ.i_eqb t_i A (k1 interp_t x) (k2 interp_t y)); auto.
         (* N-ary operators *)
-        intros [A] l; assert (forall acc, List.forallb (fun h0 : int => h0 < h) l = true -> exists v, match compute_interp (get a) A acc l with | Some l0 => Bval Typ.Tbool (distinct (Typ.i_eqb t_i A (find_eqs user_binop)) (rev l0)) | None => bvtrue end = Bval (v_type Typ.type interp_t match compute_interp (get a) A acc l with | Some l0 => Bval Typ.Tbool (distinct (Typ.i_eqb t_i A (find_eqs user_binop)) (rev l0)) | None => bvtrue end) v); auto; induction l as [ |i l IHl]; simpl.
-        intros acc _; exists (distinct (Typ.i_eqb t_i A (find_eqs user_binop)) (rev acc)); auto.
+        intros [A] l; assert (forall acc, List.forallb (fun h0 : int => h0 < h) l = true -> exists v, match compute_interp (get a) A acc l with | Some l0 => Bval Typ.Tbool (distinct (Typ.i_eqb t_i A) (rev l0)) | None => bvtrue end = Bval (v_type Typ.type interp_t match compute_interp (get a) A acc l with | Some l0 => Bval Typ.Tbool (distinct (Typ.i_eqb t_i A) (rev l0)) | None => bvtrue end) v); auto; induction l as [ |i l IHl]; simpl.
+        intros acc _; exists (distinct (Typ.i_eqb t_i A) (rev acc)); auto.
         intro acc; rewrite andb_true_iff; intros [H1 H2]; destruct (IH _ H1) as [va Hva]; rewrite Hva; simpl; case (Typ.cast (v_type Typ.type interp_t (a .[ i])) A); simpl; try (exists true; auto); intro k; destruct (IHl (k interp_t va :: acc) H2) as [vb Hvb]; exists vb; auto.
         (* Application *)
         intros i l H; apply (check_aux_interp_aux_lt_aux a h IH l H (t_func.[i])).
-      Qed.*)
+      Qed.
 
       Lemma check_aux_interp_hatom_lt : forall h, h < length t_atom ->
         exists v, t_interp.[h] = Bval (get_type h) v.
       Proof.
-
-(*
--------------------------------------------
-ETONNANT!
--------------------------------------------
-*)
-        intros.
-        unfold get_type'.
-        destruct (t_interp.[h]).
-        exists v_val0.
-        reflexivity.
-      Qed.
-
-        
-      (*set (P' i t := length t = length t_atom ->
+        set (P' i t := length t = length t_atom ->
           forall j, j < i ->
             exists v, t.[j] = Bval (v_type Typ.type interp_t (t.[j])) v).
         assert (P' (length t_atom) t_interp).
@@ -1506,32 +1276,17 @@ ETONNANT!
         rewrite get_set_other;auto.
         elim (ltb_0 _ H0).
         apply H;apply length_t_interp.
-      Qed.*)
+      Qed.
 
       Lemma check_aux_interp_hatom : forall h,
         exists v, t_interp.[h] = Bval (get_type h) v.
       Proof.
-
-
-(*
--------------------------------------------
-ETONNANT!
--------------------------------------------
-*)
-        intros.
-        unfold get_type'.
-        destruct (t_interp.[h]).
-        exists v_val0.
-        reflexivity.
-      Qed.
-
-        
-        (*intros i;case_eq (i< PArray.length t_atom);intros.
+        intros i;case_eq (i< PArray.length t_atom);intros.
         apply check_aux_interp_hatom_lt;trivial.
         unfold get_type'; rewrite !PArray.get_outofbound;trivial.
         rewrite default_t_interp; simpl; exists (1%positive); auto.
         rewrite length_t_interp;trivial.
-      Qed.*)
+      Qed.
 
       Lemma check_aux_interp_aux : forall a t,
          check_aux get_type a t ->
@@ -1550,7 +1305,7 @@ ETONNANT!
       Qed.
 
     End Interp_get.
- 
+
 
     Definition get_type t_atom :=
       get_type' (t_interp t_atom).
@@ -1558,7 +1313,7 @@ ETONNANT!
     Definition wt t_atom :=
       let t_interp := t_interp t_atom in
       let get_type := get_type' t_interp in
-      PArray.forallbi (fun i h => check_aux get_type h (get_type i)) t_atom.
+        PArray.forallbi (fun i h => check_aux get_type h (get_type i)) t_atom.
 
 
     Definition interp_hatom (t_atom : PArray.array atom) :=
@@ -1572,7 +1327,7 @@ ETONNANT!
       fun a => interp_bool (interp a).
 
   End Typing_Interp.
-  
+
   Definition check_atom t_atom :=
     match default t_atom with
       | Acop CO_xH => wf t_atom
@@ -1588,11 +1343,3 @@ ETONNANT!
 End Atom.
 
 Arguments Atom.Val {_} {_} _ _.
-
-
-
-(*Variable myeqbool : Z -> Z -> bool.
-Variable my_refl : forall x y ,reflect (x=y) (myeqbool x y).
-Definition myeqbool_param : {eq : Z -> Z -> bool & forall x y ,reflect (x=y) (eq x y)} := existT _ myeqbool my_refl.
-Definition user_binop : list {o : binop & binop_param o } :=
-    cons (existT _ (BO_eq Typ.TZ) myeqbool_param) nil.*)
