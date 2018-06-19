@@ -96,15 +96,9 @@ Qed.
 
 
 
-(*zify ça marche pas avce  autres types que Z*)
-
-
-
-
-
-
-  Goal  forall (x y:Z),
-            ( x = (y + 1)%Z)%Z.
+(*zify ça marche pas avec  autres types que Z?????????*)
+ Goal  forall (x y:Z),
+ ( x = (y + 1)%Z)%Z.
 Proof.
   intros.
   zify.
@@ -217,11 +211,14 @@ Goal forall  x y :positive  ,
 
  
 
-(*********le cas des symboles non reconnus***********)
- Definition rew_pos f (g : Z -> positive) :=forall (u :Z), Zpos (g u) = f u.
-    
- Goal forall(g:Z -> positive) (x:Z)(y:positive) ,
- (Pos.eqb (g(x+2)%Z) (g(2+x)%Z)) &&(Pos.ltb(Pos.add y 2) (Pos.add 3 y)) && true.
+  (*********le cas des symboles non reconnus***********)
+  
+(*cas 1 :Z ->positive *)
+  (*le cas de (f x ) il marche juste en remplaçant f x par fresh varible*)
+  Definition rew_pos f (g : Type -> positive) :=forall (u :_), Zpos (g u) = f u.
+ Print Z.
+ Goal forall(g:Z -> positive) (x:Z)(y:positive),
+implb (Pos.eqb (g(x+2)%Z) (g(2+x)%Z)) (Zeq_bool (x+2)%Z (2+x)%Z )&&(Pos.ltb(Pos.add y 2) (Pos.add 3 y))  &&true.
 Proof.
   repeat
     match goal with
@@ -236,36 +233,52 @@ Proof.
          | [ |-context [Zpos (?X ?Y)] ] =>let f := fresh f in pose (f:= fun u => Zpos (X u));
                                                            assert (G : forall u, Zpos (g u) = f u);
                                                            unfold f; auto;
-                                                             repeat rewrite G
-        | [ |- context[ Pos.ltb ?X ?Y ]  ]=>change (Pos.ltb X Y) with (Z.ltb (Zpos X) (Zpos Y))
-        | [ |-context [Zpos (?A +?B)] ] =>rewrite Zpos_plus_distr                                                            
-       | [ |-context [Zpos ?X] ] =>let n := fresh n in pose (n:=Zpos X);fold n                                                                         
+  repeat rewrite G
+        | [ |- context[ Pos.ltb ?X ?Y ]  ]=> change (Pos.ltb X Y) with (Z.ltb (Zpos X) (Zpos Y))
+        | [ |-context [Zpos (?A +?B)] ] => rewrite Zpos_plus_distr
+        | [ |-context [Zpos (Psucc ?X)] ]=> rewrite (Zpos_succ_morphism X)
+        (********ne marche pas dans le cas des nombres****)
+        (*| [ |-context [Zpos ?X] ] => let n := fresh n in pose (n:=Zpos X);fold n
+           *)                                 
     end.
-(*pose (n:=Zpos y).
-fold n.*)
-verit.
+pose (n :=Zpos y) ; fold n.
+  verit.
 Qed.
 
 
-  Goal forall (x y :positive )(z:Z)(P:positive -> bool)(f :Z -> positive) (k : Z -> bool),
-      
 
-    (negb(Pos.eqb (f z) y)) || (negb(P(f z ))) || (Pos.eqb( f z) y) || (k z) || negb ( k z).
+
+(*cas 2 : positive -> Z *) (*cas 3:positive -> positive*)
+Lemma positive_nat_Z p :Z.of_nat (Pos.to_nat p) =Zpos p.
+Proof.
+  destruct (Pos2Nat.is_succ p) as (n ,H).
+  rewrite H. simpl. f_equal. now apply SuccNat2Pos.inv.
+Qed.
+
+(*Lemma inj_add n m : 0<=n -> 0<=m -> Z.to_nat(n+m)%nat =(Z.to_nat n +Z.to_nat m)%nat.*)
+Goal forall (x y :positive )(f :positive -> positive),Pos.eqb (f(x+2)%positive) (f(x+2)%positive).
 Proof.
   repeat match goal with
-         | [ |-forall _:positive , _ ] => intro
+         |[ |-forall _:positive , _ ] => intro
          | [ |- forall _ : _ -> _, _] => intro
          | [ |- forall _ : Z, _] => intro
          | [ |- forall _ : bool, _] => intro
          | [ |- forall _ : Type, _] => intro
-         | |- context[Pos.eqb ?X ?Y] =>
-  change (Pos.eqb X Y) with (Z.eqb (Zpos X) (Zpos Y));rewrite Zeq_bool_Zeqb
-        | |-context [Zpos ?X] =>let n := fresh n in pose (n:=Zpos X);fold n
-         | [ |- context [Pos.add ?X ?Y ] ] =>rewrite pos_to_Z_add 
-
-         end.
-  verit.
-  admit.
+      (*   | [ |-context [(?X ?Y)] ]  =>  match Y with
+                                     |Pos.add ?A ?B => change( Pos.add A B) with (Z.add(Z.to_nat (Z.of_nat(Pos.to_nat A))) (Z.to_nat (Z.of_nat (Pos.to_nat B))) ) ; rewrite inj_add 
+                                     | _ => idtac                                                          *)                              end;change (?X ?Y) with (Z.to_nat(Z.of_nat (X Y)))
+                                                                                          
+         | [ |- context[ Pos.eqb ?X ?Y ]  ]=>change (Pos.eqb X Y) with (Z.eqb (Zpos X) (Zpos Y));rewrite Zeq_bool_Zeqb
+         | [ |- context [Pos.add ?X ?Y ] ] => change (Pos.add X Y) with (Z.add (Zpos X) (Zpos Y))                                                      
+                                                                                                            | [ |-context [Zpos (?X ?Y)] ] =>let f := fresh f in pose (f:= fun u => Zpos (X u));
+                                                           assert (G : forall u, Zpos (g u) = f u);
+                                                           unfold f; auto;
+                                                             repeat rewrite G
+         | [ |- context[ Pos.ltb ?X ?Y ]  ]=> change (Pos.ltb X Y) with (Z.ltb (Zpos X) (Zpos Y))
+         | [ |-context [Zpos (?A +?B)] ] => rewrite Zpos_plus_distr                                                            
+         | [ |-context [Zpos ?X] ] =>let n := fresh n in pose (n:=Zpos X);fold n                                                                   
+    end.
+verit.        
 Qed.
 
 
