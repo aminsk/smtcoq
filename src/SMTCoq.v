@@ -1,13 +1,16 @@
-
 Require Export Int63 List PArray.
 Require Export State SMT_terms Trace.
 Export Atom Form Sat_Checker Cnf_Checker Euf_Checker.
+Require Import Bool.
+Local Open Scope int63_scope.
+Require Import Arith.EqNat.
+Require Import PArith.
+Require Import BinPos BinInt.
+Require Import Omega.
+Require Import ZArith.
+Open Scope Z_scope.
 
 Declare ML Module "smtcoq_plugin".
-
-
-
-
 
 
 (*******************transformation d'un but qui n'est pas en forme***********************)
@@ -15,26 +18,32 @@ Ltac fold_rec1 a b c :=
   repeat match goal with
          | |- context [ a (b ?X) ] => change (a (b X)) with (c X)
          end.
+
 Ltac fold_rec a b c d :=
   repeat match goal with
          | |- context [ a (b (c ?X)) ] => change (a (b (c X))) with (d X)
          end.
+
 Lemma new_var_P : forall A : Prop, (positive-> A) -> A.
   intros A H.
   apply H.
   exact xH.
 Qed.
-Definition ZtoPos (z : Z) : positive :=
+
+ Definition ZtoPos (z : Z) : positive :=
   match z with
   | Zpos p => p
   | _      => 1%positive
   end.
+
 Lemma ZtoPosid : forall (p : positive),
   ZtoPos (Zpos p) = p.
 Proof.
   intros p.
   reflexivity.
 Qed.
+
+
 Lemma PostoZid:forall (z:Z),  Zpos(ZtoPos z) = z.
  (* 0 < x -> Z.pos (Z.to_pos x) = x*)
 Proof.
@@ -50,8 +59,11 @@ Proof.
   - rewrite Z.eqb_neq. intro H. case_eq (Zeq_bool a b); auto. now rewrite <- Zeq_is_eq_bool.
 Qed.
 
+
 Ltac hide_Pos_var X:= is_var X;let z := fresh X in pose (z:=Zpos X) ;fold z.
 Ltac hide_Pos_cst x := let red := eval cbv in x in change x with red.
+
+   
 Ltac isPcst t :=
   match t with
   | xI ?p => isPcst p
@@ -73,7 +85,7 @@ Lemma inj_mul_Z : forall n n' : Z, ZtoPos(n * n') = (ZtoPos n * ZtoPos n')%posit
 Lemma change_eqbP_Z a b:
     (Z.eqb a b) = Pos.eqb (ZtoPos a) (ZtoPos b). 
   Admitted.
-Lemma is_pos p : 0 <= Zpos p.
+Lemma is_pos p : 0 < Zpos p.
 Proof.
 easy.
 Qed.
@@ -166,15 +178,21 @@ on abandonne le match *)
   end;
 (* On efface notre variable fraîche *)
   clear var;
-  repeat match goal with
+ repeat match goal with
          | |- context [ xO (ZtoPos (Zpos ?t)) ] => change (xO (ZtoPos (Zpos t))) with (xO t)
          | |- context [ xI (ZtoPos (Zpos ?t)) ] => change (xI (ZtoPos (Zpos t))) with (xI t)
          end.
 
-
+Goal (2 = 1)%positive.
+  (* replace (eq (xO xH) xH) with (eq (xO xH) (ZtoPos (Zpos xH))) by now rewrite !ZtoPosid. *)
+  (* Focus 2. *)
+  (* rewrite !ZtoPosid. *)
+  PostoZ2.
+Abort.
+  
 Ltac Pos_to_Z_en_form1 :=
   match goal with
-  |  [    |-forall _:positive , _ ] => intro
+         |  [ |-forall _:positive , _ ] => intro
          | [ |- forall _ : _ -> _, _] => intro
          | [ |- forall _ : Z, _] => intro
          | [ |- forall _ : bool, _] => intro
@@ -195,11 +213,15 @@ Ltac Pos_to_Z_en_form1 :=
  Ltac Pos_to_Z_en_form2 :=
    match goal with 
   |  |-context [Zpos ?X] => if is_var X then (hide_Pos_var X) else fail
-  |  |-context [Zpos ?X] => if isPcst X then (hide_Pos_cst (Zpos X)) else fail
+  (* |  |-context [Zpos ?X] => if isPcst X then (hide_Pos_cst (Zpos X)) else fail *)
   |  |-context [?X (ZtoPos?Y)] => let f := fresh X in pose (f := fun y => X (ZtoPos y)); fold_rec1 X ZtoPos f
   |  |-context [Zpos (?X ?Y)] => let f := fresh X in pose (f := fun y => Zpos (X y));  fold_rec1 Zpos X f
-  end.
- 
-Ltac ZtoPos_tac :=intros; PostoZ2 ; repeat Pos_to_Z_en_form1;  repeat Pos_to_Z_en_form2; repeat rewrite PostoZid.
+   end.
+
+ (*Ltac Pos_to_Z_en_form3 :=
+   match goal with
+       | [ H := (Zpos ?T) : Z |- _ ] =>let h = fresh h in  assert (h :  (Z.gtb  (T) 0 )=true      )by auto;refine(_ h)
+  *)
 
 
+ Ltac ZtoPos_tac :=intros; PostoZ2 ; repeat Pos_to_Z_en_form1;  repeat Pos_to_Z_en_form2; repeat rewrite PostoZid.
