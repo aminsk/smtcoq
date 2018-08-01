@@ -1,3 +1,5 @@
+
+
 Require Export Int63 List PArray.
 Require Export State SMT_terms Trace.
 Export Atom Form Sat_Checker Cnf_Checker Euf_Checker.
@@ -5,9 +7,7 @@ Export Atom Form Sat_Checker Cnf_Checker Euf_Checker.
 
 
 Declare ML Module "smtcoq_plugin".
-
-
-(*******************transformation d'un but qui n'est pas en forme***********************)
+(*******fonctions utiles************)
 Ltac fold_rec1 a b c :=
   repeat match goal with
          | |- context [ a (b ?X) ] => change (a (b X)) with (c X)
@@ -18,6 +18,11 @@ Ltac fold_rec a b c d :=
          | |- context [ a (b (c ?X)) ] => change (a (b (c X))) with (d X)
          end.
 
+Tactic Notation "if" tactic(t) "then" tactic(t1) "else" tactic(t2) :=
+  first [ t; first [ t1 | fail 2 ] | t2 ].
+
+
+(*****transformer pos to z*******)
 Lemma new_var_P : forall A : Prop, (positive-> A) -> A.
   intros A H.
   apply H.
@@ -125,11 +130,10 @@ Ltac Ntonat :=
  *)
 
 
-Tactic Notation "if" tactic(t) "then" tactic(t1) "else" tactic(t2) :=
-  first [ t; first [ t1 | fail 2 ] | t2 ].
 
-(********************************pos -> Z*************************)
-Ltac PostoZ2 :=
+
+
+Ltac PostoZEnForm1 :=
 (* on crée un nom frais *)
   let var := fresh "var" in
 (* on crée artificiellement une prémisse de type N à notre théorème*)
@@ -177,14 +181,8 @@ on abandonne le match *)
          | |- context [ xI (ZtoPos (Zpos ?t)) ] => change (xI (ZtoPos (Zpos t))) with (xI t)
          end.
 
-Goal (2 = 1)%positive.
-  (* replace (eq (xO xH) xH) with (eq (xO xH) (ZtoPos (Zpos xH))) by now rewrite !ZtoPosid. *)
-  (* Focus 2. *)
-  (* rewrite !ZtoPosid. *)
-  PostoZ2.
-Abort.
   
-Ltac Pos_to_Z_en_form1 :=
+Ltac PostoZEnForm2 :=
   match goal with
          |  [ |-forall _:positive , _ ] => intro
          | [ |- forall _ : _ -> _, _] => intro
@@ -204,7 +202,7 @@ Ltac Pos_to_Z_en_form1 :=
 (*goal = true ---> implb (Z.gtb x0 0) goal = true*)
 
 
- Ltac Pos_to_Z_en_form2 :=
+ Ltac PostoZEnForm3 :=
    match goal with 
   |  |-context [Zpos ?X] => if is_var X then (hide_Pos_var X) else fail
   (* |  |-context [Zpos ?X] => if isPcst X then (hide_Pos_cst (Zpos X)) else fail *)
@@ -218,7 +216,7 @@ Ltac Pos_to_Z_en_form1 :=
   *)
 
 
- Ltac PostoZ_tac :=intros; PostoZ2 ; repeat Pos_to_Z_en_form1;  repeat Pos_to_Z_en_form2; repeat rewrite PostoZid.
+ Ltac PostoZ_tac :=intros; PostoZEnForm1 ; repeat PostoZEnForm2;  repeat PostoZEnForm3; repeat rewrite PostoZid.
 
 
 
@@ -226,13 +224,7 @@ Ltac Pos_to_Z_en_form1 :=
 
 
 
-
-
-
- (*****************************nat to Z************************************)
-Tactic Notation "if" tactic(t) "then" tactic(t1) "else" tactic(t2) :=
-  first [ t; first [ t1 | fail 2 ] | t2 ].
-
+ (**************Nat vers Z****************)
 
 Ltac hide_Nat_var X:= is_var X;let z := fresh X in pose (z:= Z.of_nat X) ;fold z.
 Ltac hide_Nat_cst x := let red := eval cbv in x in change x with red.
@@ -255,7 +247,7 @@ Ltac isNatcst t :=
   | _ => constr:(false)
   end.
 
-Ltac NattoZ2 :=
+Ltac NattoZEnForm1 :=
 (* on crée un nom frais *)
   let var := fresh "var" in
 (* on crée artificiellement une prémisse de type nat à notre théorème*)
@@ -297,22 +289,20 @@ on abandonne le match *)
 (* On efface notre variable fraîche*) 
 clear var;
 repeat match goal with
-           | |- context [ S ( (Z.of_nat ?t))] =>change (S (Z.of_nat t)) with (S  t)
+           | |- context [ S (Z.to_nat (Z.of_nat ?t))] =>change (S(Z.to_nat (Z.of_nat t))) with (S  t)
   end.
 
 
 
-Ltac Nat_to_Z_en_form1 :=
+Ltac NattoZEnForm2 :=
   match goal with
          |[ |-forall _:positive , _ ] => intro
          | [ |- forall _ : nat -> _, _] => intro
          | [ |- forall _ : Z, _] => intro
          | [ |- forall _ : bool, _] => intro
-         | [ |- forall _ : Type, _] => intro      
-        
-           |  |-context [plus (Z.to_nat (Z.of_nat ?X)) (Z.to_nat (Z.of_nat ?Y)) ] =>  rewrite <- (Z2Nat.inj_add (Z.of_nat X) (Z.of_nat Y) (Nat2Z.is_nonneg X) (Nat2Z.is_nonneg Y))                                                                            
+         | [ |- forall _ : Type, _] => intro             |  |-context [plus (Z.to_nat (Z.of_nat ?X)) (Z.to_nat (Z.of_nat ?Y)) ] =>  rewrite <- (Z2Nat.inj_add (Z.of_nat X) (Z.of_nat Y) (Nat2Z.is_nonneg X) (Nat2Z.is_nonneg Y))                                                                            
           
-       (*  |  |-context [ sub (Z.to_nat (Z.of_nat ?X)) (Z.to_nat (Z.of_nat ?Y)) ] =>  rewrite <- (Z2Nat.inj_sub (Z.of_nat X) (Z.of_nat Y) (Nat2Z.is_nonneg X) (Nat2Z.is_nonneg Y)) *)
+         |  |-context [ sub (Z.to_nat (Z.of_nat ?X)) (Z.to_nat (Z.of_nat ?Y)) ] =>  rewrite <- (Z2Nat.inj_sub (Z.of_nat X) (Z.of_nat Y) (Nat2Z.is_nonneg X) (Nat2Z.is_nonneg Y)) 
          |  |-context [mult (Z.to_nat (Z.of_nat ?X)) (Z.to_nat (Z.of_nat ?Y)) ] =>  rewrite <- (Z2Nat.inj_mul (Z.of_nat X) (Z.of_nat Y) (Nat2Z.is_nonneg X) (Nat2Z.is_nonneg Y)) 
          |  |-context [ltb (Z.to_nat ?X) (Z.to_nat ?Y) ] =>  change (ltb (Z.to_nat X) (Z.to_nat Y)) with (Z.to_nat (Z.ltb( X  Y)))
          |  |-context [beq_nat (Z.to_nat ?X) (Z.to_nat ?Y) ] => replace (beq_nat (Z.to_nat X) (Z.to_nat Y)) with (Z.eqb X Y); [ |apply change_eqbNat_Z];rewrite Zeq_bool_Zeqb
@@ -320,38 +310,35 @@ Ltac Nat_to_Z_en_form1 :=
   end.
  
 
- Ltac Nat_to_Z_en_form2 :=
+ Ltac NattoZEnForm3 :=
   match goal with
   |  |-context [Z.of_nat ?X] => if is_var X then (hide_Nat_var X) else fail
  (* |  |-context [Z.of_nat ?X] => if isNatcst X then (hide_Nat_cst (Z.of_nat X)) else fail*) 
   |  |-context [?X (Z.to_nat ?Y)] => let f := fresh X in pose (f := fun y => X (Z.to_nat y)); fold_rec1 X Z.to_nat f
   |  |-context [Z.of_nat (?X ?Y)] => let f := fresh X in pose (f := fun y => Z.of_nat (X y));  fold_rec1 Z.of_nat X f
   end.
- Ltac a3 :=
+ Ltac NatZId :=
    match goal with
    | |-context [ Z.of_nat(Z.to_nat ?X)] =>rewrite ( Z2Nat.id X  (Nat2Z.is_nonneg Z.of_nat(Z.to_nat X)))
    end.
- Ltac NattoZ_tac := intros ; NattoZ2 ; repeat Nat_to_Z_en_form1 ; repeat Nat_to_Z_en_form2;repeat rewrite  ( (Z2Nat.id));repeat rewrite  (Nat2Z.is_nonneg) .
+ Ltac NattoZ_tac := intros ; NattoZEnForm1 ; repeat NattoZEnForm2 ; repeat NattoZEnForm3;repeat NatZId.
 
 
 
-
-
- 
-(********************N to nat***************************)
-
-
+(********************N to nat***************)
 Lemma new_var_N : forall A : Prop, (N -> A) -> A.
-  intros A H.
+ intros A H.
   apply H.
   exact N0.
 Qed.
+
+SearchAbout nat.
 
 Lemma change_eqbN_nat a b:
     (beq_nat a b) = N.eqb (N.of_nat a) (N.of_nat b). 
 Admitted.
 
-Ltac Ntonat2 :=
+Ltac NtoNatEnForm1 :=
 (* on crée un nom frais *)
   let var := fresh "var" in
 (* on crée artificiellement une prémisse de type N à notre théorème*)
@@ -388,40 +375,34 @@ on abandonne le match *)
   end;
 (* On efface notre variable fraîche *)
   clear var.
-
-
-  (*******************un but qui est en forme**************************)
- Tactic Notation "if" tactic(t) "then" tactic(t1) "else" tactic(t2) :=
-   first [ t; first [ t1 | fail 2 ] | t2 ].
- Ltac hide_N_var X:= is_var X;let z := fresh X in pose (z:=N.to_nat X) ;fold z.
+Ltac hide_N_var X:= is_var X;let z := fresh X in pose (z:=N.to_nat X) ;fold z.
 Ltac is_N_cst t :=
   match t with
   | N0 => constr:(true)
   | Npos ?p => isPcst p
   | _ => constr:(false)
   end.
- 
- Ltac hide_N_cst x := let red := eval cbv in x in change x with red.
 
- Ltac N_to_nat_en_form1 :=
+
+
+Ltac hide_N_cst x := let red := eval cbv in x in change x with red.
+
+
+ Ltac NtoNatEnForm2 :=
    match goal with
            | [ |-forall _:positive , _ ] => intro
          | [ |- forall _ : _ -> _, _] => intro
          | [ |- forall _ : Z, _] => intro
          | [ |- forall _ : bool, _] => intro
          | [ |- forall _ : Type, _] => intro
-         |  |-context [N.add (N.of_nat ?X) (N.of_nat ?Y) ] =>           
-          replace (N.add (N.of_nat X) (N.of_nat Y)) with (N.of_nat (plus X Y));
-            [ |apply Nnat.Nat2N.inj_add ]
-         | |-context[N.sub (N.of_nat ?X)(N.of_nat ?Y) ] => replace (N.sub (N.of_nat X )(N.of_nat Y)) with (N.of_nat (minus X Y));[ |apply Nnat.Nat2N.inj_sub]
-         | |-context[N.mul (N.of_nat ?X)(N.of_nat ?Y) ] => replace (N.mul(N.of_nat X )(N.of_nat Y)) with (N.of_nat (mul X Y));[ |apply Nnat.Nat2N.inj_mul]
-         |  |-context [N.eqb (N.of_nat ?X) (N.of_nat ?Y) ] =>
-          replace (N.eqb (N.of_nat X) (N.of_nat Y)) with (beq_nat X Y);
-          [ | apply  change_eqbN_nat]
-           
-         end.
-Print Nnat.Nat2N.inj_add.
-Ltac N_to_nat_en_form2 :=
+
+         |  |-context [N.add (N.of_nat (N.to_nat ?X)) (N.of_nat (N.to_nat ?Y)) ] =>  rewrite <-(Nnat.Nat2N.inj_add (N.to_nat X) (N.to_nat Y) )
+         |  |-context [N.sub (N.of_nat (N.to_nat ?X)) (N.of_nat (N.to_nat ?Y)) ] =>  rewrite <-(Nnat.Nat2N.inj_sub (N.to_nat X) (N.to_nat Y) )
+          |  |-context [N.mul (N.of_nat (N.to_nat ?X)) (N.of_nat (N.to_nat ?Y)) ] =>  rewrite <-(Nnat.Nat2N.inj_mul (N.to_nat X) (N.to_nat Y) )
+            |  |-context [N.eqb (N.of_nat ?X) (N.of_nat ?Y) ] => replace (N.eqb (N.of_nat  X) (N.of_nat  Y)) with (beq_nat  X Y); [ | apply change_eqbN_nat]
+                                                                                                             end.
+
+Ltac NtoNatEnForm3 :=
   match goal with
   |  |-context [N.to_nat ?X] => if is_var X then (hide_N_var X) else fail
   |  |-context [N.to_nat ?X] => if is_N_cst X then (hide_N_cst (N.to_nat X)) else fail
@@ -429,8 +410,12 @@ Ltac N_to_nat_en_form2 :=
   |  |-context [N.to_nat (?X ?Y)] => let f := fresh X in pose (f := fun y => N.to_nat (X y));  fold_rec1 N.to_nat X f
 (*  |  |-context [N.to_nat (?X (N.of_nat ?Y))] => let f := fresh X in pose (f := fun y => N.to_nat (X (N.of_nat y)));  fold_rec N.to_nat X N.of_nat f*)
   end.
-         
-
-Ltac FromNtonat := Ntonat2 ; repeat  N_to_nat_en_form1;  repeat N_to_nat_en_form2; repeat rewrite Nnat.Nat2N.id.
 
 
+Ltac NtoNat_tac :=intros; NtoNatEnForm1 ; repeat  NtoNatEnForm2;  repeat NtoNatEnForm3; repeat rewrite Nnat.Nat2N.id.
+
+
+
+
+
+ 
