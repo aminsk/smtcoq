@@ -394,7 +394,7 @@ Ltac NattoZEnForm2 :=
  Ltac NattoZ_tac := intros ; NattoZEnForm1 ; repeat NattoZEnForm2 ;repeat  Nat_Z_Rewrite;repeat NattoZEnForm3;repeat Rewrite_cst.
 
 
-
+(*******************************N ->Z *****************************)
  Lemma new_var_N : forall A : Prop, (N -> A) -> A.
  intros A H.
   apply H.

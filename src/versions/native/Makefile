@@ -104,10 +104,10 @@ COQSRCLIBS?=-I $(COQLIB)kernel -I $(COQLIB)lib \
   -I $(COQLIB)plugins/xml
 ZFLAGS=$(OCAMLLIBS) $(COQSRCLIBS) -I $(CAMLP4LIB)
 
-CAMLC?=$(OCAMLC) -c -rectypes
-CAMLOPTC?=$(OCAMLOPT) -c -rectypes
-CAMLLINK?=$(OCAMLC) -rectypes
-CAMLOPTLINK?=$(OCAMLOPT) -rectypes
+CAMLC?=$(OCAMLC) -c -rectypes -unsafe-string
+CAMLOPTC?=$(OCAMLOPT) -c -rectypes -unsafe-string
+CAMLLINK?=$(OCAMLC) -rectypes -unsafe-string
+CAMLOPTLINK?=$(OCAMLOPT) -rectypes -unsafe-string
 GRAMMARS?=grammar.cma
 CAMLP4EXTEND?=pa_extend.cmo pa_macro.cmo q_MLast.cmo
 CAMLP4OPTIONS?=-loc loc
