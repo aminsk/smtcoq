@@ -40,6 +40,14 @@ Section certif.
 
   Import EnvRing Atom.
 
+(*comment injecter le type donné par utilisateur au type Z utilsé par micromega*)
+  Class c_type_transf(u_type:Type) (TY:c_type u_type) (u_type':Type) (TY':c_type u_type'):Type :=
+    {
+      transf:u_type -> u_type';
+      (*preuve que transf réserve l'égalité sur ce type*)
+      transf_relation:forall (x y :u_type), equ_t x y <-> equ_t (transf x)(transf y)
+    }.
+
   (* Register option_map as PrimInline. *)
 
   Section BuildPositive.
