@@ -104,8 +104,13 @@ Proof. destruct x; easy || now destruct y.
 Qed.
 
 Lemma change_eqbP_Z a b:
-    (Z.eqb a b) = Pos.eqb (ZtoPos a) (ZtoPos b). 
-Admitted.
+    (Z.eqb a b) -> Pos.eqb (ZtoPos a) (ZtoPos b). 
+Proof.
+  unfold is_true.
+  rewrite Z.eqb_eq.
+  intro Heq; rewrite Heq.
+  apply Pos.eqb_refl.
+Qed.
 
 Lemma is_pos p : 0 < Zpos p.
 Proof.
@@ -256,10 +261,19 @@ Lemma new_var_Nat : forall A : Prop, (nat -> A) -> A.
   exact O.
 Qed.
 
-Lemma change_eqbNat_Z a b:
-  (Z.eqb a b) = beq_nat (Z.to_nat a) (Z.to_nat b).
+Lemma change_eqbNat_Z a b: 0 <= a -> 0 <= b ->
+  Z.eqb a b = beq_nat (Z.to_nat a) (Z.to_nat b).
 Proof.
-Admitted.
+intros Ha Hb.
+case_eq (Z.eqb a b).
+  rewrite Z.eqb_eq.
+  intro Heq; rewrite Heq.
+  apply beq_nat_refl.
+  rewrite Z.eqb_neq.
+  intro Hneq; symmetry; rewrite beq_nat_false_iff.
+  intro Heq; apply Hneq.
+  apply Z2Nat.inj_iff; tauto.
+Qed.
 
 Lemma inj_0 : Z.of_nat 0 = 0.
 Proof.
@@ -405,7 +419,17 @@ SearchAbout nat.
 
 Lemma change_eqbN_nat a b:
     (beq_nat a b) = N.eqb (N.of_nat a) (N.of_nat b). 
-Admitted.
+Proof.
+  case_eq (beq_nat a b).
+  rewrite beq_nat_true_iff.
+  intro Heq; rewrite Heq.
+  symmetry; apply N.eqb_refl.
+  rewrite beq_nat_false_iff.
+  intro Hneq; symmetry.
+  rewrite N.eqb_neq.
+  intro Heq; apply Hneq.
+  apply Nnat.Nat2N.inj; tauto.
+Qed.
 
 Ltac NtoNatEnForm1 :=
 (* on crée un nom frais *)
